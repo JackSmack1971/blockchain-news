@@ -1,0 +1,50 @@
+[
+  {
+    "id": "market-analysis",
+    "name": "Market Analysis",
+    "slug": "market-analysis",
+    "description": "In-depth analysis of cryptocurrency markets, price movements, and trading insights",
+    "color": "#10B981",
+    "icon": "TrendingUp"
+  },
+  {
+    "id": "defi",
+    "name": "DeFi",
+    "slug": "defi",
+    "description": "Decentralized Finance protocols, yield farming, and DeFi ecosystem updates",
+    "color": "#8B5CF6",
+    "icon": "Coins"
+  },
+  {
+    "id": "nfts",
+    "name": "NFTs",
+    "slug": "nfts",
+    "description": "Non-fungible tokens, digital art, and collectibles marketplace news",
+    "color": "#F59E0B",
+    "icon": "Image"
+  },
+  {
+    "id": "regulations",
+    "name": "Regulations",
+    "slug": "regulations",
+    "description": "Cryptocurrency regulations, government policies, and legal developments",
+    "color": "#EF4444",
+    "icon": "Scale"
+  },
+  {
+    "id": "technology-updates",
+    "name": "Technology Updates",
+    "slug": "technology-updates",
+    "description": "Blockchain technology advancements, protocol upgrades, and technical innovations",
+    "color": "#3B82F6",
+    "icon": "Cpu"
+  },
+  {
+    "id": "institutional",
+    "name": "Institutional",
+    "slug": "institutional",
+    "description": "Corporate adoption, institutional investments, and enterprise blockchain solutions",
+    "color": "#6B7280",
+    "icon": "Building2"
+  }
+]
