@@ -1,0 +1,138 @@
+{
+  "coins": [
+    {
+      "id": "bitcoin",
+      "symbol": "BTC",
+      "name": "Bitcoin",
+      "price": 73547.32,
+      "change_24h": 3.24,
+      "market_cap": 1445231780000,
+      "volume_24h": 42851293847,
+      "circulating_supply": 19650000,
+      "logo": "/images/bitcoin-logo.jpg"
+    },
+    {
+      "id": "ethereum",
+      "symbol": "ETH",
+      "name": "Ethereum",
+      "price": 4234.67,
+      "change_24h": 2.18,
+      "market_cap": 509123456789,
+      "volume_24h": 18947382647,
+      "circulating_supply": 120280000,
+      "logo": "/images/ethereum-logo.png"
+    },
+    {
+      "id": "binancecoin",
+      "symbol": "BNB",
+      "name": "BNB",
+      "price": 687.45,
+      "change_24h": 1.87,
+      "market_cap": 102847362819,
+      "volume_24h": 2183947263,
+      "circulating_supply": 149644293,
+      "logo": "https://cryptologos.cc/logos/binance-coin-bnb-logo.png"
+    },
+    {
+      "id": "solana",
+      "symbol": "SOL",
+      "name": "Solana",
+      "price": 234.89,
+      "change_24h": 4.67,
+      "market_cap": 109847362819,
+      "volume_24h": 4729384756,
+      "circulating_supply": 467831293,
+      "logo": "https://cryptologos.cc/logos/solana-sol-logo.png"
+    },
+    {
+      "id": "cardano",
+      "symbol": "ADA",
+      "name": "Cardano",
+      "price": 1.23,
+      "change_24h": -0.87,
+      "market_cap": 43847362819,
+      "volume_24h": 1847382647,
+      "circulating_supply": 35647293847,
+      "logo": "https://cryptologos.cc/logos/cardano-ada-logo.png"
+    },
+    {
+      "id": "chainlink",
+      "symbol": "LINK",
+      "name": "Chainlink",
+      "price": 28.76,
+      "change_24h": 2.34,
+      "market_cap": 17293847562,
+      "volume_24h": 847382647,
+      "circulating_supply": 601293847,
+      "logo": "https://cryptologos.cc/logos/chainlink-link-logo.png"
+    },
+    {
+      "id": "polkadot",
+      "symbol": "DOT",
+      "name": "Polkadot",
+      "price": 18.45,
+      "change_24h": 1.23,
+      "market_cap": 23847362819,
+      "volume_24h": 729384756,
+      "circulating_supply": 1293847562,
+      "logo": "https://cryptologos.cc/logos/polkadot-new-dot-logo.png"
+    },
+    {
+      "id": "polygon",
+      "symbol": "MATIC",
+      "name": "Polygon",
+      "price": 2.34,
+      "change_24h": -1.45,
+      "market_cap": 23147362819,
+      "volume_24h": 1293847562,
+      "circulating_supply": 9847362819,
+      "logo": "https://cryptologos.cc/logos/polygon-matic-logo.png"
+    },
+    {
+      "id": "avalanche",
+      "symbol": "AVAX",
+      "name": "Avalanche",
+      "price": 67.89,
+      "change_24h": 3.78,
+      "market_cap": 26847362819,
+      "volume_24h": 1847382647,
+      "circulating_supply": 395847362,
+      "logo": "https://cryptologos.cc/logos/avalanche-avax-logo.png"
+    },
+    {
+      "id": "cosmos",
+      "symbol": "ATOM",
+      "name": "Cosmos",
+      "price": 23.45,
+      "change_24h": 0.87,
+      "market_cap": 9147362819,
+      "volume_24h": 484738264,
+      "circulating_supply": 390847362,
+      "logo": "https://cryptologos.cc/logos/cosmos-atom-logo.png"
+    }
+  ],
+  "global_stats": {
+    "total_market_cap": 2847362819485,
+    "total_volume_24h": 89473826472,
+    "market_cap_change_24h": 2.67,
+    "bitcoin_dominance": 50.8,
+    "ethereum_dominance": 17.9,
+    "defi_market_cap": 123847362819,
+    "defi_dominance": 4.35
+  },
+  "fear_greed_index": {
+    "value": 72,
+    "classification": "Greed",
+    "last_updated": "2025-06-22T05:58:19Z"
+  },
+  "trending_searches": [
+    "Bitcoin ETF",
+    "Ethereum Shanghai",
+    "DeFi protocols",
+    "NFT marketplace",
+    "Solana ecosystem",
+    "Layer 2 scaling",
+    "Stablecoin regulation",
+    "Web3 gaming"
+  ]
+}
