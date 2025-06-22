@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import { logSecurityEvent } from './logging';
 
 export class DatabaseError extends Error {
   constructor(message: string, public cause?: unknown) {
@@ -36,6 +37,7 @@ export async function initDb(): Promise<void> {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`);
   } catch (err) {
+    await logSecurityEvent('db_error', { op: 'initDb', message: (err as Error).message });
     throw new DatabaseError('Failed to initialize database', err);
   }
 }
@@ -45,6 +47,7 @@ export async function resetDatabase(): Promise<void> {
     await pool.query('DROP TABLE IF EXISTS users CASCADE');
     await initDb();
   } catch (err) {
+    await logSecurityEvent('db_error', { op: 'resetDatabase', message: (err as Error).message });
     throw new DatabaseError('Failed to reset database', err);
   }
 }
@@ -80,6 +83,7 @@ export async function createUser(data: {id: string; email: string; passwordHash:
       [data.id, data.email, data.passwordHash, data.username, data.walletAddress || null]
     );
   } catch (err) {
+    await logSecurityEvent('db_error', { op: 'createUser', message: (err as Error).message });
     throw new DatabaseError('Failed to create user', err);
   }
 }
@@ -89,6 +93,7 @@ export async function findUserByEmail(email: string): Promise<any | null> {
     const res = await pool.query('SELECT * FROM users WHERE email=$1', [email]);
     return res.rows[0] || null;
   } catch (err) {
+    await logSecurityEvent('db_error', { op: 'findUserByEmail', message: (err as Error).message });
     throw new DatabaseError('Failed to fetch user', err);
   }
 }
@@ -102,6 +107,7 @@ export async function findUserByWallet(address: string): Promise<any | null> {
     const res = await pool.query('SELECT * FROM users WHERE wallet_address=$1', [address]);
     return res.rows[0] || null;
   } catch (err) {
+    await logSecurityEvent('db_error', { op: 'findUserByWallet', message: (err as Error).message });
     throw new DatabaseError('Failed to fetch wallet user', err);
   }
 }
@@ -117,6 +123,7 @@ export async function withTransaction<T>(
     return result;
   } catch (err) {
     await client.query('ROLLBACK');
+    await logSecurityEvent('db_error', { op: 'transaction', message: (err as Error).message });
     throw new DatabaseError('Transaction failed', err);
   } finally {
     client.release();
