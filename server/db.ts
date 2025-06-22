@@ -14,9 +14,15 @@ if (!connStr) {
 
 export const pool = new Pool({ connectionString: connStr, idleTimeoutMillis: 30000, max: 10 });
 
+let initPromise: Promise<void> | null = null;
+
 export async function initDb(): Promise<void> {
-  try {
-    await pool.query(`CREATE TABLE IF NOT EXISTS users (
+  if (initPromise) return initPromise;
+  initPromise = (async () => {
+    try {
+      await pool.query('DROP SCHEMA IF EXISTS public CASCADE');
+      await pool.query('CREATE SCHEMA IF NOT EXISTS public');
+      await pool.query(`CREATE TABLE IF NOT EXISTS users (
       id UUID PRIMARY KEY,
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
@@ -27,9 +33,13 @@ export async function initDb(): Promise<void> {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`);
-  } catch (err) {
-    throw new DatabaseError('Failed to initialize database', err);
-  }
+    } catch (err) {
+      throw new DatabaseError('Failed to initialize database', err);
+    } finally {
+      initPromise = null;
+    }
+  })();
+  return initPromise;
 }
 
 export async function backupDatabase(path: string): Promise<void> {
