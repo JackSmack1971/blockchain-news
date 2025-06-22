@@ -8,6 +8,8 @@ import { loginSchema, registerSchema } from '../src/lib/validators';
 dotenv.config();
 
 const SESSION_SECRET = process.env.SESSION_SECRET as string;
+const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN;
+const COOKIE_MAX_AGE = parseInt(process.env.COOKIE_MAX_AGE || '604800000', 10); // default 7 days
 if (!SESSION_SECRET) {
   throw new Error('SESSION_SECRET is required');
 }
@@ -28,13 +30,20 @@ export const resetUsers = (): void => {
 export const app = express();
 app.use(express.json());
 const isProd = process.env.NODE_ENV === 'production';
+const cookieName = isProd ? '__Secure-sid' : 'sid';
 app.use(
   session({
-    name: 'sid',
+    name: cookieName,
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: { httpOnly: true, secure: isProd, sameSite: 'lax' },
+    cookie: {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: 'lax',
+      domain: COOKIE_DOMAIN,
+      maxAge: COOKIE_MAX_AGE,
+    },
   }),
 );
 
@@ -121,7 +130,17 @@ app.get('/api/token', (req, res) => {
 });
 
 app.post('/api/token', (req, res) => {
-  req.session.user = req.body.user;
+  const { user, cookie } = req.body as {
+    user: User;
+    cookie?: { domain?: string; maxAge?: number; secure?: boolean; httpOnly?: boolean };
+  };
+  req.session.user = user;
+  if (cookie) {
+    if (cookie.domain) req.session.cookie.domain = cookie.domain;
+    if (cookie.maxAge) req.session.cookie.maxAge = cookie.maxAge;
+    if (typeof cookie.secure === 'boolean') req.session.cookie.secure = cookie.secure;
+    if (typeof cookie.httpOnly === 'boolean') req.session.cookie.httpOnly = cookie.httpOnly;
+  }
   res.status(204).end();
 });
 
