@@ -14,6 +14,7 @@ import ArticlePage from './components/pages/ArticlePage';
 import AuthPage from './components/pages/AuthPage';
 import ProfilePage from './components/pages/ProfilePage';
 import AboutPage from './components/pages/AboutPage';
+import BlockchainNewsInterface from './components/demo/BlockchainNewsInterface';
 
 // Context Providers
 import { AuthProvider } from './contexts/AuthContext';
@@ -37,6 +38,7 @@ function App() {
                   <Route path="/auth" element={<AuthPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
                   <Route path="/about" element={<AboutPage />} />
+                  <Route path="/demo" element={<BlockchainNewsInterface />} />
                 </Routes>
               </main>
               <Footer />
