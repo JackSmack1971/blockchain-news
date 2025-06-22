@@ -4,7 +4,13 @@ process.env.SESSION_SECRET = 'a-very-long-and-secure-session-secret-key';
 process.env.RATE_LIMIT_MAX = '10';
 process.env.RATE_LIMIT_WINDOW = '1000';
 process.env.DATABASE_URL = 'postgresql://appuser:testpass@localhost/appdb';
-const { app, resetUsers, resetNonces, _authLimiter } = await import('../index.ts');
+const {
+  app,
+  resetUsers,
+  resetNonces,
+  _authLimiter,
+  shutdown,
+} = await import('../index.ts');
 
 describe('profile update', () => {
   beforeEach(async () => {
@@ -12,6 +18,10 @@ describe('profile update', () => {
     resetNonces();
     _authLimiter.resetKey('::ffff:127.0.0.1');
     _authLimiter.resetKey('127.0.0.1');
+  });
+
+  afterAll(async () => {
+    await shutdown();
   });
 
   it('updates whitelisted fields only', async () => {
