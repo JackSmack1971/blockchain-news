@@ -1,4 +1,5 @@
 import type { RequestInit } from 'undici';
+import { apiFetch } from './api';
 
 export interface TokenPayload<T = unknown> {
   user: T;
@@ -32,25 +33,12 @@ export const apiRequest = async <T>(
   retries = 1,
   timeout = 5000,
 ): Promise<T> => {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeout);
-
   try {
-    const response = await fetch(input, {
-      ...init,
-      signal: controller.signal,
-      credentials: 'include',
-    } as RequestInit);
-    clearTimeout(id);
-    if (!response.ok) {
-      throw new TokenError(`HTTP ${response.status}`);
-    }
-    return (await response.json()) as T;
+    return await apiFetch<T>(input, { ...init, credentials: 'include' }, {
+      retries,
+      timeout,
+    });
   } catch (error) {
-    clearTimeout(id);
-    if (retries > 0) {
-      return apiRequest<T>(input, init, retries - 1, timeout);
-    }
     throw new TokenError((error as Error).message);
   }
 };

@@ -1,5 +1,10 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { logError } from '@/lib/errors';
+import { apiFetch } from '@/lib/api';
+import articlesFallback from '../../public/data/articles.json';
+import marketFallback from '../../public/data/market-data.json';
+import categoriesFallback from '../../public/data/categories.json';
+import trendingFallback from '../../public/data/trending-topics.json';
 
 interface Article {
   id: string;
@@ -112,22 +117,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
     
     try {
-      const [articlesResponse, marketResponse, categoriesResponse, trendingResponse] = await Promise.all([
-        fetch('/data/articles.json'),
-        fetch('/data/market-data.json'),
-        fetch('/data/categories.json'),
-        fetch('/data/trending-topics.json'),
-      ]);
-
-      if (!articlesResponse.ok || !marketResponse.ok || !categoriesResponse.ok || !trendingResponse.ok) {
-        throw new Error('Failed to load data');
-      }
-
       const [articlesData, marketDataResponse, categoriesData, trendingData] = await Promise.all([
-        articlesResponse.json(),
-        marketResponse.json(),
-        categoriesResponse.json(),
-        trendingResponse.json(),
+        apiFetch<Article[]>('/data/articles.json'),
+        apiFetch<MarketData>('/data/market-data.json'),
+        apiFetch<Category[]>('/data/categories.json'),
+        apiFetch<TrendingTopic[]>('/data/trending-topics.json'),
       ]);
 
       setArticles(articlesData);
@@ -137,6 +131,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
       logError(err, 'loadInitialData');
+      setArticles(articlesFallback as Article[]);
+      setMarketData(marketFallback as MarketData);
+      setCategories(categoriesFallback as Category[]);
+      setTrendingTopics(trendingFallback as TrendingTopic[]);
     } finally {
       setIsLoading(false);
     }
