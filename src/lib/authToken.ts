@@ -5,6 +5,16 @@ export interface TokenPayload<T = unknown> {
 }
 
 const TOKEN_ENDPOINT = '/api/token';
+const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN;
+const COOKIE_MAX_AGE = Number(process.env.COOKIE_MAX_AGE || 604800000); // 7 days
+const COOKIE_SECURE = process.env.NODE_ENV === 'production';
+
+interface CookieOptions {
+  domain?: string;
+  maxAge?: number;
+  secure?: boolean;
+  httpOnly?: boolean;
+}
 
 class TokenError extends Error {
   constructor(message: string) {
@@ -49,10 +59,17 @@ export const apiRequest = async <T>(
  * Send payload to server for JWT signing and httpOnly cookie storage.
  */
 export const setToken = async <T>(payload: TokenPayload<T>): Promise<void> => {
+  const cookie: CookieOptions = {
+    domain: COOKIE_DOMAIN,
+    maxAge: COOKIE_MAX_AGE,
+    secure: COOKIE_SECURE,
+    httpOnly: true,
+  };
+
   await apiRequest<void>(TOKEN_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ user: payload.user, cookie }),
   });
 };
 
