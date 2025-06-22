@@ -9,7 +9,7 @@ import { validateEnvironment } from './config/environment';
 import crypto from 'crypto';
 import { ethers } from 'ethers';
 import { loginSchema, registerSchema, walletLoginSchema } from '../src/lib/validators';
-import fs from 'fs/promises';
+import { logSecurityEvent } from './logging';
 import {
   initDb,
   createUser,
@@ -107,6 +107,10 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   store: new MemoryStore(),
+  handler: (req, res) => {
+    logSecurityEvent('rate_limit_exceeded', { ip: req.ip, path: req.originalUrl });
+    res.status(429).json({ error: 'Too many requests' });
+  },
 });
 export const _authLimiter = authLimiter; // test-only export
 
@@ -162,6 +166,21 @@ export const enforceHttps: express.RequestHandler = (req, res, next) => {
 
 app.use(enforceHttps);
 app.use(express.json());
+
+const requiredHeaders = [
+  'content-security-policy',
+  'x-frame-options',
+  'strict-transport-security',
+];
+app.use((req, res, next) => {
+  res.on('finish', () => {
+    const missing = requiredHeaders.filter(h => !res.getHeader(h));
+    if (missing.length) {
+      logSecurityEvent('header_violation', { path: req.originalUrl, missing });
+    }
+  });
+  next();
+});
 
 // Security headers middleware applied early in the pipeline
 // CSP allows blockchain APIs and inlined styles/scripts for Vite in dev mode
@@ -239,14 +258,6 @@ const createWalletUser = (address: string): User => ({
   walletAddress: address,
 });
 
-const logSecurityEvent = async (msg: string): Promise<void> => {
-  try {
-    await fs.mkdir('logs', { recursive: true });
-    await fs.appendFile('logs/security.log', `${new Date().toISOString()} ${msg}\n`);
-  } catch (err) {
-    console.error('Failed to write security log', err);
-  }
-};
 
 const requireAuth: express.RequestHandler = (req, res, next) => {
   if (req.session?.user) return next();
@@ -275,7 +286,7 @@ app.post('/api/login', authLimiter, async (req, res) => {
     const { email, password } = loginSchema.parse(req.body),
       attempt = loginAttempts.get(email) || { count: 0, lockUntil: 0 };
     if (attempt.lockUntil > Date.now()) {
-      await logSecurityEvent(`Locked login attempt for ${email}`);
+      await logSecurityEvent('account_locked', { email, ip: req.ip });
       await new Promise(r => setTimeout(r, Math.random() * 50));
       return res.status(403).json({ error: 'Account locked' });
     }
@@ -286,14 +297,14 @@ app.post('/api/login', authLimiter, async (req, res) => {
     if (!user || !user.id || !isPasswordValid) {
       if (++attempt.count >= 5) {
         attempt.lockUntil = Date.now() + 15 * 60 * 1000;
-        await logSecurityEvent(`Account locked for ${email}`);
+        await logSecurityEvent('account_locked', { email, ip: req.ip });
       }
       loginAttempts.set(email, attempt); await new Promise(r => setTimeout(r, Math.random() * 50));
-      await logSecurityEvent(`Failed login for ${email}`);
+      await logSecurityEvent('failed_login', { email, ip: req.ip });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
       loginAttempts.delete(email); req.session.user = sanitize(user);
-      await logSecurityEvent(`Successful login for ${email}`);
+      await logSecurityEvent('login_success', { email, ip: req.ip });
       res.json({ message: 'Login successful', user: sanitize(user) });
   } catch {
     res.status(400).json({ error: 'Invalid input' });
@@ -324,10 +335,12 @@ app.post('/api/login/wallet', authLimiter, validateWalletAddress, async (req, re
     walletLoginSchema.pick({ signature: true }).parse({ signature });
     const entry = nonceStore.get(walletAddress.toLowerCase());
     if (!entry || entry.expiresAt < Date.now()) {
+      await logSecurityEvent('failed_login', { walletAddress, ip: req.ip, reason: 'nonce_expired' });
       return res.status(400).json({ error: 'Nonce expired' });
     }
     const recovered = ethers.verifyMessage(entry.nonce, signature);
     if (recovered.toLowerCase() !== walletAddress.toLowerCase()) {
+      await logSecurityEvent('failed_login', { walletAddress, ip: req.ip, reason: 'invalid_signature' });
       return res.status(401).json({ error: 'Invalid signature' });
     }
     nonceStore.delete(walletAddress.toLowerCase());
@@ -337,6 +350,7 @@ app.post('/api/login/wallet', authLimiter, validateWalletAddress, async (req, re
       await createUser(user);
     }
     req.session.user = sanitize(user);
+    await logSecurityEvent('login_success', { walletAddress, ip: req.ip });
     res.json(sanitize(user));
   } catch {
     res.status(400).json({ error: 'Invalid input' });
