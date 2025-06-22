@@ -4,6 +4,7 @@ import rateLimit, { MemoryStore } from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import csurf from 'csurf';
 import dotenv from 'dotenv';
+import { validateEnvironment } from './config/environment';
 import crypto from 'crypto';
 import { ethers } from 'ethers';
 import { loginSchema, registerSchema, walletLoginSchema } from '../src/lib/validators';
@@ -18,35 +19,31 @@ import {
 
 dotenv.config();
 
-const SESSION_SECRET = process.env.SESSION_SECRET as string;
+const envResult = validateEnvironment();
+if (!envResult.success) {
+  console.error(envResult.error);
+  process.exit(1);
+}
+const config = envResult.data;
 
 /**
  * Parse and validate cookie settings from environment variables.
  * Throws if values are invalid to prevent insecure configuration.
  */
 const parseCookieOptions = () => {
-  const maxAgeEnv = parseInt(process.env.COOKIE_MAX_AGE || '', 10);
-  const maxAge = Number.isFinite(maxAgeEnv)
-    ? maxAgeEnv
-    : 24 * 60 * 60 * 1000;
-  if (maxAge <= 0) throw new Error('Invalid COOKIE_MAX_AGE');
-  const domain = process.env.COOKIE_DOMAIN;
-  if (domain && !/^[a-z0-9.-]+$/i.test(domain)) {
-    throw new Error('Invalid COOKIE_DOMAIN');
-  }
   return {
-    domain: domain || undefined,
-    maxAge,
-    secure: process.env.NODE_ENV === 'production',
+    domain: config.COOKIE_DOMAIN || undefined,
+    maxAge: config.COOKIE_MAX_AGE,
+    secure: config.NODE_ENV === 'production' || config.COOKIE_SECURE,
     httpOnly: true,
     sameSite: 'strict' as const,
   };
 };
 const cookieOptions = parseCookieOptions();
 
-const RATE_LIMIT_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10);
-const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX || '5', 10);
-if (!SESSION_SECRET) {
+const RATE_LIMIT_WINDOW_MS = config.RATE_LIMIT_WINDOW;
+const RATE_LIMIT_MAX = config.RATE_LIMIT_MAX;
+if (!config.SESSION_SECRET) {
   throw new Error('SESSION_SECRET is required');
 }
 if (!Number.isFinite(RATE_LIMIT_WINDOW_MS) || !Number.isFinite(RATE_LIMIT_MAX)) {
@@ -165,12 +162,12 @@ app.use((req, res, next) => {
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   next();
 });
-const isProd = process.env.NODE_ENV === 'production';
+const isProd = config.NODE_ENV === 'production';
 const cookieName = isProd ? '__Secure-sid' : 'sid';
 app.use(
   session({
     name: cookieName,
-    secret: SESSION_SECRET,
+    secret: config.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: cookieOptions,
@@ -178,7 +175,7 @@ app.use(
 );
 
 // Enable CSRF protection except during automated testing
-if (process.env.NODE_ENV !== 'test') {
+if (config.NODE_ENV !== 'test') {
   const csrf = csurf();
   app.use(csrf);
   app.get('/api/csrf-token', (req, res) => {
@@ -357,5 +354,5 @@ app.post('/api/profile', requireAuth, (req, res) => {
 });
 
 if (require.main === module) {
-  app.listen(3001, () => console.log('server running on 3001'));
+  app.listen(config.PORT, () => console.log(`server running on ${config.PORT}`));
 }
