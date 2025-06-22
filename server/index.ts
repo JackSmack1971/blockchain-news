@@ -1,5 +1,6 @@
 import express from 'express';
 import session from 'express-session';
+import rateLimit, { MemoryStore } from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import csurf from 'csurf';
 import dotenv from 'dotenv';
@@ -12,8 +13,13 @@ dotenv.config();
 const SESSION_SECRET = process.env.SESSION_SECRET as string;
 const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN;
 const COOKIE_MAX_AGE = parseInt(process.env.COOKIE_MAX_AGE || '604800000', 10); // default 7 days
+const RATE_LIMIT_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10);
+const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX || '5', 10);
 if (!SESSION_SECRET) {
   throw new Error('SESSION_SECRET is required');
+}
+if (!Number.isFinite(RATE_LIMIT_WINDOW_MS) || !Number.isFinite(RATE_LIMIT_MAX)) {
+  throw new Error('Invalid rate limit configuration');
 }
 
 interface User {
@@ -42,6 +48,15 @@ export const resetNonces = (): void => {
 
 export const app = express();
 app.enable('trust proxy');
+
+const authLimiter = rateLimit({
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: RATE_LIMIT_MAX,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new MemoryStore(),
+});
+export const _authLimiter = authLimiter; // test-only export
 
 /**
  * Redirect HTTP traffic to HTTPS when in production.
@@ -109,7 +124,7 @@ const requireAuth: express.RequestHandler = (req, res, next) => {
   res.status(401).json({ error: 'Unauthorized' });
 };
 
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', authLimiter, async (req, res) => {
   try {
     const { username, email, password } = registerSchema.parse(req.body);
     if (users.some(u => u.email === email)) {
@@ -125,7 +140,7 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', authLimiter, async (req, res) => {
   try {
     const { email, password } = loginSchema.parse(req.body);
     const user = users.find(u => u.email === email);
@@ -139,7 +154,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-app.post('/api/login/wallet/nonce', (req, res) => {
+app.post('/api/login/wallet/nonce', authLimiter, (req, res) => {
   try {
     const { walletAddress } = req.body as { walletAddress: string };
     if (!walletAddress) {
@@ -162,7 +177,7 @@ app.post('/api/login/wallet/nonce', (req, res) => {
   }
 });
 
-app.post('/api/login/wallet', async (req, res) => {
+app.post('/api/login/wallet', authLimiter, async (req, res) => {
   try {
     const { walletAddress, signature } = req.body as {
       walletAddress: string; signature: string };

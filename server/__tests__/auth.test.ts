@@ -1,12 +1,16 @@
 import { describe, it, beforeEach, expect } from 'vitest';
 import request from 'supertest';
 process.env.SESSION_SECRET = 'test-secret';
-const { app, resetUsers, resetNonces, _nonceStore } = await import('../index.ts');
+process.env.RATE_LIMIT_MAX = '10';
+process.env.RATE_LIMIT_WINDOW_MS = '1000';
+const { app, resetUsers, resetNonces, _nonceStore, _authLimiter } = await import('../index.ts');
 
 describe('auth flow', () => {
   beforeEach(() => {
     resetUsers();
     resetNonces();
+    _authLimiter.resetKey('::ffff:127.0.0.1');
+    _authLimiter.resetKey('127.0.0.1');
   });
 
   it('registers, accesses protected route, and logs out', async () => {
@@ -89,5 +93,16 @@ describe('auth flow', () => {
       .post('/api/login/wallet')
       .send({ walletAddress: wallet.address, signature })
       .expect(400);
+  });
+
+  it('rate limits login attempts', async () => {
+    const agent = request.agent(app);
+    for (let i = 0; i < 10; i++) {
+      await agent.post('/api/login').send({ email: 'x@x.com', password: 'a' });
+    }
+    await agent
+      .post('/api/login')
+      .send({ email: 'x@x.com', password: 'a' })
+      .expect(429);
   });
 });

@@ -8,7 +8,8 @@
     "build": "yes | pnpm install && rm -rf node_modules/.vite-temp && tsc -b && vite build",
     "lint": "yes | pnpm install && eslint .",
     "preview": "yes | pnpm install && vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:security": "vitest run"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -50,6 +51,7 @@
     "embla-carousel-react": "^8.5.2",
     "ethers": "^6.8.1",
     "express": "^4.19.2",
+    "express-rate-limit": "^6.7.0",
     "express-session": "^1.17.3",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.364.0",
