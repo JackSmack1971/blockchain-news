@@ -64,20 +64,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Initialize auth state from secure token
   useEffect(() => {
-    const stored = getToken<User>();
-    if (stored) {
-      setUser(stored.user);
-    }
-    setIsLoading(false);
+    (async () => {
+      const stored = await getToken<User>();
+      if (stored) {
+        setUser(stored.user);
+      }
+      setIsLoading(false);
+    })();
   }, []);
 
   // Persist token when user state changes
   useEffect(() => {
-    if (user) {
-      setToken<User>({ user });
-    } else {
-      clearToken();
-    }
+    (async () => {
+      if (user) {
+        await setToken<User>({ user });
+      } else {
+        await clearToken();
+      }
+    })();
   }, [user]);
 
   const login = async (email: string, password: string): Promise<boolean> => {
@@ -171,8 +175,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const logout = () => {
-    clearToken();
+  const logout = async () => {
+    await clearToken();
     setUser(null);
   };
 

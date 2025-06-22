@@ -1,31 +1,75 @@
-import Cookies from 'js-cookie';
+import type { RequestInit } from 'undici';
 
 export interface TokenPayload<T = unknown> {
   user: T;
 }
 
-const TOKEN_KEY = 'auth_token';
+const TOKEN_ENDPOINT = '/api/token';
 
-export const setToken = <T>(payload: TokenPayload<T>): void => {
+class TokenError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TokenError';
+  }
+}
+
+/**
+ * Perform a fetch request with timeout and retry logic.
+ */
+const apiRequest = async <T>(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  retries = 1,
+  timeout = 5000,
+): Promise<T> => {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+
   try {
-    const encoded = btoa(JSON.stringify(payload));
-    const secure = typeof window !== 'undefined' && window.location.protocol === 'https:';
-    Cookies.set(TOKEN_KEY, encoded, { secure, sameSite: 'strict' });
-  } catch {
-    // ignore serialization errors
+    const response = await fetch(input, {
+      ...init,
+      signal: controller.signal,
+      credentials: 'include',
+    } as RequestInit);
+    clearTimeout(id);
+    if (!response.ok) {
+      throw new TokenError(`HTTP ${response.status}`);
+    }
+    return (await response.json()) as T;
+  } catch (error) {
+    clearTimeout(id);
+    if (retries > 0) {
+      return apiRequest<T>(input, init, retries - 1, timeout);
+    }
+    throw new TokenError((error as Error).message);
   }
 };
 
-export const getToken = <T>(): TokenPayload<T> | null => {
-  const token = Cookies.get(TOKEN_KEY);
-  if (!token) return null;
+/**
+ * Send payload to server for JWT signing and httpOnly cookie storage.
+ */
+export const setToken = async <T>(payload: TokenPayload<T>): Promise<void> => {
+  await apiRequest<void>(TOKEN_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+};
+
+/**
+ * Retrieve and verify JWT from secure cookie via server call.
+ */
+export const getToken = async <T>(): Promise<TokenPayload<T> | null> => {
   try {
-    return JSON.parse(atob(token)) as TokenPayload<T>;
+    return await apiRequest<TokenPayload<T>>(TOKEN_ENDPOINT);
   } catch {
     return null;
   }
 };
 
-export const clearToken = (): void => {
-  Cookies.remove(TOKEN_KEY);
+/**
+ * Clear authentication token cookie on the server.
+ */
+export const clearToken = async (): Promise<void> => {
+  await apiRequest<void>(TOKEN_ENDPOINT, { method: 'DELETE' });
 };
