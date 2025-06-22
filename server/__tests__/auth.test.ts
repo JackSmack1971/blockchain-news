@@ -12,7 +12,7 @@ describe('auth flow', () => {
     const agent = request.agent(app);
     await agent
       .post('/api/register')
-      .send({ username: 'alice', email: 'a@a.com', password: 'secret', confirmPassword: 'secret' })
+      .send({ username: 'alice', email: 'a@a.com', password: 'Secret1!', confirmPassword: 'Secret1!' })
       .expect(200);
     await agent.get('/api/protected').expect(200);
     await agent.post('/api/logout').expect(200);
@@ -23,11 +23,11 @@ describe('auth flow', () => {
     const agent = request.agent(app);
     await agent
       .post('/api/register')
-      .send({ username: 'bob', email: 'b@b.com', password: 'secret', confirmPassword: 'secret' })
+      .send({ username: 'bob', email: 'b@b.com', password: 'Secret1!', confirmPassword: 'Secret1!' })
       .expect(200);
     await agent
       .post('/api/login')
-      .send({ email: 'b@b.com', password: 'wrong12' })
+      .send({ email: 'b@b.com', password: 'Wrong123!' })
       .expect(401);
   });
 });
