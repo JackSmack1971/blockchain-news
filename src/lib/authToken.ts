@@ -1,4 +1,3 @@
-import type { RequestInit } from 'undici';
 import { apiFetch } from './api';
 
 export interface TokenPayload<T = unknown> {
