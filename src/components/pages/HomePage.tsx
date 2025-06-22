@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Calendar, Clock, TrendingUp, Star, Search, Filter } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -15,7 +15,7 @@ import {
 import { useData } from '@/contexts/DataContext';
 import ArticleCard from '@/components/ui/ArticleCard';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import TrendingSidebar from '@/components/ui/TrendingSidebar';
+const TrendingSidebar = lazy(() => import('@/components/ui/TrendingSidebar'));
 
 const HomePage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -138,6 +138,9 @@ const HomePage: React.FC = () => {
                 <img
                   src={featuredArticles[0].image}
                   alt={featuredArticles[0].title}
+                  loading="lazy"
+                  width={1200}
+                  height={400}
                   className="w-full h-[300px] md:h-[400px] object-cover rounded-lg shadow-lg"
                 />
                 <div className="absolute top-4 right-4">
@@ -262,7 +265,9 @@ const HomePage: React.FC = () => {
 
           {/* Sidebar */}
           <div className="lg:col-span-1">
-            <TrendingSidebar />
+            <Suspense fallback={<div className="py-4 text-center">Loading...</div>}>
+              <TrendingSidebar />
+            </Suspense>
           </div>
         </div>
       </div>

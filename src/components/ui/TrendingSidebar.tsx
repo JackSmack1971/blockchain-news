@@ -99,6 +99,9 @@ const TrendingSidebar: React.FC = () => {
                   <img
                     src={coin.logo}
                     alt={coin.name}
+                    loading="lazy"
+                    width={24}
+                    height={24}
                     className="w-6 h-6 rounded-full"
                     onError={(e) => {
                       e.currentTarget.src = '/images/crypto-placeholder.png';
@@ -179,6 +182,9 @@ const TrendingSidebar: React.FC = () => {
                 <img
                   src={article.image}
                   alt={article.title}
+                  loading="lazy"
+                  width={48}
+                  height={48}
                   className="w-12 h-12 object-cover rounded flex-shrink-0"
                 />
                 <div className="flex-1 min-w-0">
