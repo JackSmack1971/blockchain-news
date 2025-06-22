@@ -71,6 +71,26 @@ export const enforceHttps: express.RequestHandler = (req, res, next) => {
 
 app.use(enforceHttps);
 app.use(express.json());
+
+// Security headers middleware applied early in the pipeline
+app.use((req, res, next) => {
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; " +
+      "script-src 'self' 'unsafe-inline'; " +
+      "style-src 'self' 'unsafe-inline'; " +
+      "img-src 'self' data: https:; " +
+      "connect-src 'self'"
+  );
+  res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  next();
+});
 const isProd = process.env.NODE_ENV === 'production';
 const cookieName = isProd ? '__Secure-sid' : 'sid';
 app.use(
