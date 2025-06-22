@@ -89,4 +89,68 @@ describe('Security Tests', () => {
       }
     });
   });
+
+  describe('Additional Security Cases', () => {
+    it('rejects invalid signature formats', async () => {
+      const agent = request.agent(app);
+      const { Wallet } = await import('ethers');
+      const wallet = Wallet.createRandom();
+      await agent
+        .post('/api/login/wallet/nonce')
+        .send({ walletAddress: wallet.address })
+        .expect(200);
+
+      const invalidSigs = ['', 'bad-signature', '0x1234'];
+      for (const sig of invalidSigs) {
+        const res = await agent
+          .post('/api/login/wallet')
+          .send({ walletAddress: wallet.address, signature: sig });
+        expect(res.status).toBe(400);
+      }
+    });
+
+    it('prevents replay attacks by rejecting reused signature', async () => {
+      const agent = request.agent(app);
+      const { Wallet } = await import('ethers');
+      const wallet = Wallet.createRandom();
+      const nonceRes = await agent
+        .post('/api/login/wallet/nonce')
+        .send({ walletAddress: wallet.address })
+        .expect(200);
+      const sig = await wallet.signMessage(nonceRes.body.nonce);
+      await agent
+        .post('/api/login/wallet')
+        .send({ walletAddress: wallet.address, signature: sig })
+        .expect(200);
+      const replay = await agent
+        .post('/api/login/wallet')
+        .send({ walletAddress: wallet.address, signature: sig });
+      expect(replay.status).toBe(400);
+    });
+
+    it('expires session after timeout', async () => {
+      process.env.COOKIE_MAX_AGE = '50';
+      const { app: timeoutApp } = await import('../index.ts');
+      const agent = request.agent(timeoutApp);
+      await agent
+        .post('/api/register')
+        .send({ username: 'short', email: 'short@test.com', password: 'Secret1!', confirmPassword: 'Secret1!' })
+        .expect(200);
+      await new Promise(r => setTimeout(r, 70));
+      await agent.get('/api/token').expect(401);
+    });
+
+    it('rejects malicious wallet address injection', async () => {
+      const res = await request(app)
+        .post('/api/login/wallet')
+        .send({ walletAddress: '<script>alert(1)</script>' });
+      expect(res.status).toBe(400);
+    });
+
+    it('sets CSP header on 404 responses', async () => {
+      const res = await request(app).get('/no-such-route');
+      expect(res.headers['content-security-policy']).toContain("default-src 'self'");
+      expect(res.status).toBe(404);
+    });
+  });
 });
