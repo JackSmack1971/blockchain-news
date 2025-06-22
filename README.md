@@ -154,6 +154,8 @@ blockchain-news/
 - **Input Validation** - Form validation and sanitization
 - **Authentication Security** - Secure user session management
 - **XSS Protection** - Safe content rendering
+- **Automated Dependency Checks** - `pnpm audit` runs on every commit
+- **Daily Updates** - Dependabot monitors dependencies for security patches
 
 ## 🛠️ Development
 
