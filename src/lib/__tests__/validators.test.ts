@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { loginSchema, registerSchema } from '../validators';
+import {
+  loginSchema,
+  registerSchema,
+  ethereumAddressSchema,
+  walletLoginSchema,
+} from '../validators';
 
 describe('loginSchema', () => {
   it('validates correct data', () => {
@@ -73,4 +78,32 @@ it('fails on short username', () => {
     confirmPassword: 'Abcdef1!',
   });
   expect(result.success).toBe(false);
+});
+
+describe('ethereumAddressSchema', () => {
+  it('accepts valid checksum address', () => {
+    const result = ethereumAddressSchema.safeParse(
+      '0x52908400098527886E0F7030069857D2E4169EE7',
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects invalid format', () => {
+    const result = ethereumAddressSchema.safeParse('0x12345');
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects bad checksum', () => {
+    const result = ethereumAddressSchema.safeParse(
+      '0x52908400098527886E0F7030069857d2E4169EE7',
+    );
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('walletLoginSchema', () => {
+  it('requires walletAddress and signature', () => {
+    const result = walletLoginSchema.safeParse({ walletAddress: '0x52908400098527886E0F7030069857D2E4169EE7' });
+    expect(result.success).toBe(false);
+  });
 });

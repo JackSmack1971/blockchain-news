@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { getAddress } from 'ethers';
 
 const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 const USERNAME_REGEX = /^[a-zA-Z0-9_-]{3,20}$/;
@@ -44,3 +45,21 @@ export const registerSchema = z
     message: 'Passwords do not match',
     path: ['confirmPassword'],
   });
+
+export const ethereumAddressSchema = z
+  .string()
+  .regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum address format')
+  .refine(address => {
+    try {
+      getAddress(address);
+      return true;
+    } catch {
+      return false;
+    }
+  }, 'Invalid address checksum');
+
+export const walletLoginSchema = z.object({
+  walletAddress: ethereumAddressSchema,
+  signature: z.string().min(1),
+  nonce: z.string().min(1).optional(),
+});

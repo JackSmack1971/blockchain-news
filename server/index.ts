@@ -6,7 +6,7 @@ import csurf from 'csurf';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 import { ethers } from 'ethers';
-import { loginSchema, registerSchema } from '../src/lib/validators';
+import { loginSchema, registerSchema, walletLoginSchema } from '../src/lib/validators';
 import fs from 'fs/promises';
 import {
   initDb,
@@ -98,6 +98,39 @@ const authLimiter = rateLimit({
   store: new MemoryStore(),
 });
 export const _authLimiter = authLimiter; // test-only export
+
+interface AddressValidation {
+  valid: boolean;
+  address?: string;
+  error?: string;
+}
+
+export const validateEthereumAddress = (address: unknown): AddressValidation => {
+  if (!address || typeof address !== 'string') {
+    return { valid: false, error: 'Address must be a string' };
+  }
+  if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+    return { valid: false, error: 'Invalid Ethereum address format' };
+  }
+  try {
+    return { valid: true, address: ethers.getAddress(address) };
+  } catch {
+    return { valid: false, error: 'Invalid address checksum' };
+  }
+};
+
+export const validateWalletAddress: express.RequestHandler = (req, res, next) => {
+  const { walletAddress } = req.body as { walletAddress?: unknown };
+  if (!walletAddress) {
+    return res.status(400).json({ error: 'Wallet address is required' });
+  }
+  const validation = validateEthereumAddress(walletAddress);
+  if (!validation.valid) {
+    return res.status(400).json({ error: validation.error });
+  }
+  req.body.walletAddress = validation.address;
+  next();
+};
 
 /**
  * Redirect HTTP traffic to HTTPS when in production.
@@ -235,20 +268,11 @@ app.post('/api/login', authLimiter, async (req, res) => {
   }
 });
 
-app.post('/api/login/wallet/nonce', authLimiter, (req, res) => {
+app.post('/api/login/wallet/nonce', authLimiter, validateWalletAddress, (req, res) => {
   try {
     const { walletAddress } = req.body as { walletAddress: string };
-    if (!walletAddress) {
-      return res.status(400).json({ error: 'Wallet required' });
-    }
-    let address: string;
-    try {
-      address = ethers.getAddress(walletAddress);
-    } catch {
-      return res.status(400).json({ error: 'Invalid address' });
-    }
     const nonce = crypto.randomBytes(32).toString('hex');
-    nonceStore.set(address.toLowerCase(), {
+    nonceStore.set(walletAddress.toLowerCase(), {
       nonce,
       expiresAt: Date.now() + 5 * 60 * 1000,
     });
@@ -258,31 +282,21 @@ app.post('/api/login/wallet/nonce', authLimiter, (req, res) => {
   }
 });
 
-app.post('/api/login/wallet', authLimiter, async (req, res) => {
+app.post('/api/login/wallet', authLimiter, validateWalletAddress, async (req, res) => {
   try {
-    const { walletAddress, signature } = req.body as {
-      walletAddress: string; signature: string };
-    if (!walletAddress || !signature) {
-      return res.status(400).json({ error: 'Wallet and signature required' });
-    }
-    let address: string;
-    try {
-      address = ethers.getAddress(walletAddress);
-    } catch {
-      return res.status(400).json({ error: 'Invalid address' });
-    }
-    const entry = nonceStore.get(address.toLowerCase());
+    const { walletAddress, signature } = walletLoginSchema.parse(req.body);
+    const entry = nonceStore.get(walletAddress.toLowerCase());
     if (!entry || entry.expiresAt < Date.now()) {
       return res.status(400).json({ error: 'Nonce expired' });
     }
     const recovered = ethers.verifyMessage(entry.nonce, signature);
-    if (recovered.toLowerCase() !== address.toLowerCase()) {
+    if (recovered.toLowerCase() !== walletAddress.toLowerCase()) {
       return res.status(401).json({ error: 'Invalid signature' });
     }
-    nonceStore.delete(address.toLowerCase());
-    let user = await findUserByWallet(address);
+    nonceStore.delete(walletAddress.toLowerCase());
+    let user = await findUserByWallet(walletAddress);
     if (!user) {
-      user = createWalletUser(address);
+      user = createWalletUser(walletAddress);
       await createUser(user);
     }
     req.session.user = sanitize(user);
