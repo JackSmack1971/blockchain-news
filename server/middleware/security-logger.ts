@@ -25,16 +25,16 @@ export interface SecurityDetails {
 export function logSecurityEvent(
   event: string,
   details: unknown,
-  req: Request,
+  req?: Request | null,
 ): void {
   recordSecurityEvent(event, 'high');
   securityLogger.warn('SECURITY_EVENT', {
     event,
     details,
-    ip: req.ip,
-    userAgent: req.get('User-Agent'),
+    ip: req?.ip ?? 'unknown',
+    userAgent: req?.get('User-Agent'),
     timestamp: new Date().toISOString(),
-    sessionId: req.sessionID,
-    userId: req.session?.user?.id,
+    sessionId: req?.sessionID,
+    userId: req?.session?.user?.id,
   });
 }

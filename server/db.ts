@@ -20,19 +20,18 @@ export async function initDb(): Promise<void> {
   if (initPromise) return initPromise;
   initPromise = (async () => {
     try {
-      await pool.query('DROP SCHEMA IF EXISTS public CASCADE');
-      await pool.query('CREATE SCHEMA IF NOT EXISTS public');
+      await pool.query('DROP TABLE IF EXISTS users CASCADE');
       await pool.query(`CREATE TABLE IF NOT EXISTS users (
-      id UUID PRIMARY KEY,
-      email TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      wallet_address TEXT UNIQUE,
-      username TEXT,
-      bio TEXT,
-      avatar TEXT,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )`);
+        id UUID PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        wallet_address TEXT UNIQUE,
+        username TEXT,
+        bio TEXT,
+        avatar TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`);
     } catch (err) {
       throw new DatabaseError('Failed to initialize database', err);
     } finally {

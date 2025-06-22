@@ -227,7 +227,7 @@ app.post('/api/login', authLimiter, async (req, res) => {
     const { email, password } = loginSchema.parse(req.body),
       attempt = loginAttempts.get(email) || { count: 0, lockUntil: 0 };
   if (attempt.lockUntil > Date.now()) {
-    await logSecurityEvent(`Locked login attempt for ${email}`);
+    logSecurityEvent('LOCKED_LOGIN_ATTEMPT', { email }, req);
     recordFailedLogin('account_locked');
     await new Promise(r => setTimeout(r, Math.random() * 50));
     return res.status(403).json({ error: 'Account locked' });
@@ -239,15 +239,15 @@ app.post('/api/login', authLimiter, async (req, res) => {
     if (!user || !user.id || !isPasswordValid) {
       if (++attempt.count >= 5) {
         attempt.lockUntil = Date.now() + 15 * 60 * 1000;
-        await logSecurityEvent(`Account locked for ${email}`);
+        logSecurityEvent('ACCOUNT_LOCKED', { email }, req);
       }
       loginAttempts.set(email, attempt); await new Promise(r => setTimeout(r, Math.random() * 50));
       recordFailedLogin('invalid_credentials');
-      await logSecurityEvent(`Failed login for ${email}`);
+      logSecurityEvent('FAILED_LOGIN', { email }, req);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
       loginAttempts.delete(email); req.session.user = sanitize(user);
-      await logSecurityEvent(`Successful login for ${email}`);
+      logSecurityEvent('SUCCESSFUL_LOGIN', { email }, req);
       res.json({ message: 'Login successful', user: sanitize(user) });
   } catch (err) {
     if (err instanceof ZodError) {
