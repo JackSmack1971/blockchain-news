@@ -78,6 +78,9 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, variant = 'default' 
               <img
                 src={article.image}
                 alt={article.title}
+                loading="lazy"
+                width={80}
+                height={80}
                 className="w-20 h-20 object-cover rounded flex-shrink-0"
               />
               <div className="flex-1 min-w-0">
@@ -106,6 +109,9 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, variant = 'default' 
           <img
             src={article.image}
             alt={article.title}
+            loading="lazy"
+            width={400}
+            height={192}
             className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
           />
         </Link>
@@ -156,6 +162,9 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, variant = 'default' 
               <img
                 src={article.author.avatar || '/images/avatars/default.jpg'}
                 alt={article.author.name}
+                loading="lazy"
+                width={32}
+                height={32}
                 className="w-8 h-8 rounded-full object-cover"
                 onError={(e) => {
                   e.currentTarget.src = '/images/avatars/default.jpg';
