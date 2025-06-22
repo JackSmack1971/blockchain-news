@@ -1,5 +1,6 @@
-import { describe, it, beforeEach, expect } from 'vitest';
+import { describe, it, beforeEach } from 'vitest';
 import request from 'supertest';
+import { expectDefaultSecurityHeaders } from './utils/expectSecurityHeaders';
 
 process.env.SESSION_SECRET = 'a-very-long-and-secure-session-secret-key';
 process.env.RATE_LIMIT_MAX = '10';
@@ -27,13 +28,6 @@ describe('security headers', () => {
 
   it('sets comprehensive security headers', async () => {
     const res = await request(app).get('/api/token').expect(401);
-    expect(res.headers['x-frame-options']).toBe('DENY');
-    expect(res.headers['x-content-type-options']).toBe('nosniff');
-    expect(res.headers['x-xss-protection']).toBe('1; mode=block');
-    expect(res.headers['referrer-policy']).toBe('strict-origin-when-cross-origin');
-    expect(res.headers['content-security-policy']).toContain("default-src 'self'");
-    expect(res.headers['x-permitted-cross-domain-policies']).toBe('none');
-    expect(res.headers['cross-origin-embedder-policy']).toBe('require-corp');
-    expect(res.headers['cross-origin-opener-policy']).toBe('same-origin');
+    expectDefaultSecurityHeaders(res);
   });
 });

@@ -63,4 +63,10 @@ describe('authentication security headers', () => {
     expect(cookie).toContain('Secure');
     expect(cookie).toContain('SameSite=Strict');
   });
+
+  it('includes additional security headers', async () => {
+    const res = await request(app).get('/api/token').expect(401);
+    expect(res.headers['strict-transport-security']).toBeDefined();
+    expect(res.headers['permissions-policy']).toBeDefined();
+  });
 });
