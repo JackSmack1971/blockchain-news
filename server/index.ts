@@ -11,8 +11,31 @@ import { loginSchema, registerSchema } from '../src/lib/validators';
 dotenv.config();
 
 const SESSION_SECRET = process.env.SESSION_SECRET as string;
-const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN;
-const COOKIE_MAX_AGE = parseInt(process.env.COOKIE_MAX_AGE || '604800000', 10); // default 7 days
+
+/**
+ * Parse and validate cookie settings from environment variables.
+ * Throws if values are invalid to prevent insecure configuration.
+ */
+const parseCookieOptions = () => {
+  const maxAgeEnv = parseInt(process.env.COOKIE_MAX_AGE || '', 10);
+  const maxAge = Number.isFinite(maxAgeEnv)
+    ? maxAgeEnv
+    : 24 * 60 * 60 * 1000;
+  if (maxAge <= 0) throw new Error('Invalid COOKIE_MAX_AGE');
+  const domain = process.env.COOKIE_DOMAIN;
+  if (domain && !/^[a-z0-9.-]+$/i.test(domain)) {
+    throw new Error('Invalid COOKIE_DOMAIN');
+  }
+  return {
+    domain: domain || undefined,
+    maxAge,
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    sameSite: 'strict' as const,
+  };
+};
+const cookieOptions = parseCookieOptions();
+
 const RATE_LIMIT_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10);
 const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX || '5', 10);
 if (!SESSION_SECRET) {
@@ -99,13 +122,7 @@ app.use(
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: 'lax',
-      domain: COOKIE_DOMAIN,
-      maxAge: COOKIE_MAX_AGE,
-    },
+    cookie: cookieOptions,
   }),
 );
 
@@ -239,17 +256,8 @@ app.get('/api/token', (req, res) => {
 });
 
 app.post('/api/token', (req, res) => {
-  const { user, cookie } = req.body as {
-    user: User;
-    cookie?: { domain?: string; maxAge?: number; secure?: boolean; httpOnly?: boolean };
-  };
+  const { user } = req.body as { user: User };
   req.session.user = user;
-  if (cookie) {
-    if (cookie.domain) req.session.cookie.domain = cookie.domain;
-    if (cookie.maxAge) req.session.cookie.maxAge = cookie.maxAge;
-    if (typeof cookie.secure === 'boolean') req.session.cookie.secure = cookie.secure;
-    if (typeof cookie.httpOnly === 'boolean') req.session.cookie.httpOnly = cookie.httpOnly;
-  }
   res.status(204).end();
 });
 
