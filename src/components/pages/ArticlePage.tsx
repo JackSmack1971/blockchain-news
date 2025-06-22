@@ -33,6 +33,7 @@ import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import ArticleCard from '@/components/ui/ArticleCard';
+import { sanitizeHtml } from '@/lib/sanitizeHtml';
 
 interface Comment {
   id: string;
@@ -339,9 +340,13 @@ const ArticlePage: React.FC = () => {
           {/* Article Content */}
           <div className="article-content mb-12">
             {article.content.split('\n\n').map((paragraph, index) => (
-              <p key={index} className="mb-6 leading-relaxed">
-                {paragraph}
-              </p>
+              <p
+                key={index}
+                className="mb-6 leading-relaxed"
+                dangerouslySetInnerHTML={{
+                  __html: sanitizeHtml(paragraph),
+                }}
+              />
             ))}
           </div>
 
@@ -434,9 +439,12 @@ const ArticlePage: React.FC = () => {
                           {formatCommentDate(comment.timestamp)}
                         </span>
                       </div>
-                      <p className="text-muted-foreground mb-3 leading-relaxed">
-                        {comment.content}
-                      </p>
+                      <p
+                        className="text-muted-foreground mb-3 leading-relaxed"
+                        dangerouslySetInnerHTML={{
+                          __html: sanitizeHtml(comment.content),
+                        }}
+                      />
                       <div className="flex items-center space-x-4">
                         <Button variant="ghost" size="sm" className="h-8 px-2">
                           <ThumbsUp className="h-3 w-3 mr-1" />
