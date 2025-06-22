@@ -1,6 +1,7 @@
 import express from 'express';
 import session from 'express-session';
 import bcrypt from 'bcryptjs';
+import csurf from 'csurf';
 import dotenv from 'dotenv';
 import { loginSchema, registerSchema } from '../src/lib/validators';
 
@@ -36,6 +37,21 @@ app.use(
     cookie: { httpOnly: true, secure: isProd, sameSite: 'lax' },
   }),
 );
+
+// Enable CSRF protection except during automated testing
+if (process.env.NODE_ENV !== 'test') {
+  const csrf = csurf();
+  app.use(csrf);
+  app.get('/api/csrf-token', (req, res) => {
+    res.json({ csrfToken: req.csrfToken() });
+  });
+  app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if ((err as { code?: string }).code === 'EBADCSRFTOKEN') {
+      return res.status(403).json({ error: 'Invalid CSRF token' });
+    }
+    next(err as Error);
+  });
+}
 
 const sanitize = (user: User) => ({
   id: user.id,
