@@ -1,6 +1,6 @@
 import express from 'express';
 import session from 'express-session';
-import rateLimit, { MemoryStore } from 'express-rate-limit';
+import { loginLimiter } from './middleware/rate-limiter';
 import bcrypt from 'bcryptjs';
 import csurf from 'csurf';
 import dotenv from 'dotenv';
@@ -8,7 +8,8 @@ import { validateEnvironment } from './config/environment';
 import crypto from 'crypto';
 import { ethers } from 'ethers';
 import { loginSchema, registerSchema, walletLoginSchema } from '../src/lib/validators';
-import fs from 'fs/promises';
+import { logSecurityEvent } from './middleware/security-logger';
+import { register as metricsRegister, recordFailedLogin } from './monitoring/metrics';
 import {
   initDb,
   createUser,
@@ -40,14 +41,8 @@ const parseCookieOptions = () => {
   };
 };
 const cookieOptions = parseCookieOptions();
-
-const RATE_LIMIT_WINDOW_MS = config.RATE_LIMIT_WINDOW;
-const RATE_LIMIT_MAX = config.RATE_LIMIT_MAX;
 if (!config.SESSION_SECRET) {
   throw new Error('SESSION_SECRET is required');
-}
-if (!Number.isFinite(RATE_LIMIT_WINDOW_MS) || !Number.isFinite(RATE_LIMIT_MAX)) {
-  throw new Error('Invalid rate limit configuration');
 }
 await initDb();
 
@@ -87,13 +82,7 @@ export const resetLoginAttempts = (): void => {
 export const app = express();
 app.enable('trust proxy');
 
-const authLimiter = rateLimit({
-  windowMs: RATE_LIMIT_WINDOW_MS,
-  max: RATE_LIMIT_MAX,
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: new MemoryStore(),
-});
+const authLimiter = loginLimiter;
 export const _authLimiter = authLimiter; // test-only export
 
 interface AddressValidation {
@@ -204,14 +193,6 @@ const createWalletUser = (address: string): User => ({
   walletAddress: address,
 });
 
-const logSecurityEvent = async (msg: string): Promise<void> => {
-  try {
-    await fs.mkdir('logs', { recursive: true });
-    await fs.appendFile('logs/security.log', `${new Date().toISOString()} ${msg}\n`);
-  } catch (err) {
-    console.error('Failed to write security log', err);
-  }
-};
 
 const requireAuth: express.RequestHandler = (req, res, next) => {
   if (req.session?.user) return next();
@@ -239,11 +220,12 @@ app.post('/api/login', authLimiter, async (req, res) => {
   try {
     const { email, password } = loginSchema.parse(req.body),
       attempt = loginAttempts.get(email) || { count: 0, lockUntil: 0 };
-    if (attempt.lockUntil > Date.now()) {
-      await logSecurityEvent(`Locked login attempt for ${email}`);
-      await new Promise(r => setTimeout(r, Math.random() * 50));
-      return res.status(403).json({ error: 'Account locked' });
-    }
+  if (attempt.lockUntil > Date.now()) {
+    await logSecurityEvent(`Locked login attempt for ${email}`);
+    recordFailedLogin('account_locked');
+    await new Promise(r => setTimeout(r, Math.random() * 50));
+    return res.status(403).json({ error: 'Account locked' });
+  }
     const user = await findUserByEmail(email);
     const hashToCompare =
       user?.passwordHash || '$2b$10$dummy.hash.for.timing.consistency.protection.only';
@@ -254,6 +236,7 @@ app.post('/api/login', authLimiter, async (req, res) => {
         await logSecurityEvent(`Account locked for ${email}`);
       }
       loginAttempts.set(email, attempt); await new Promise(r => setTimeout(r, Math.random() * 50));
+      recordFailedLogin('invalid_credentials');
       await logSecurityEvent(`Failed login for ${email}`);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -326,6 +309,11 @@ app.delete('/api/token', (req, res) => {
 
 app.get('/api/protected', requireAuth, (req, res) => {
   res.json({ success: true });
+});
+
+app.get('/metrics', async (_req, res) => {
+  res.setHeader('Content-Type', metricsRegister.contentType);
+  res.end(await metricsRegister.metrics());
 });
 
 /**
