@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { getToken, setToken, clearToken } from '@/lib/authToken';
+import { getToken, setToken, clearToken, apiRequest } from '@/lib/authToken';
 
 interface User {
   id: string;
@@ -22,17 +22,6 @@ class ApiError extends Error {
     this.name = 'ApiError';
   }
 }
-
-const apiCall = async <T>(fn: () => Promise<T>, retries = 1): Promise<T> => {
-  try {
-    return await fn();
-  } catch (error) {
-    if (retries > 0) {
-      return apiCall(fn, retries - 1);
-    }
-    throw new ApiError((error as Error).message);
-  }
-};
 
 interface AuthContextType {
   user: User | null;
@@ -87,24 +76,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string): Promise<boolean> => {
     setIsLoading(true);
     try {
-      await apiCall(() => new Promise(res => setTimeout(res, 1000)));
-      if (!email || !password) {
-        throw new ApiError('Missing credentials');
-      }
-      const mockUser: User = {
-        id: '1',
-        username: email.split('@')[0],
-        email,
-        avatar: '/images/avatars/default.jpg',
-        bio: 'Blockchain enthusiast and crypto investor',
-        preferences: {
-          categories: ['Market Analysis', 'DeFi'],
-          notifications: true,
-          newsletter: true,
-        },
-        bookmarks: [],
-      };
-      setUser(mockUser);
+      const data = await apiRequest<User>('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      setUser(data);
       return true;
     } catch (error) {
       console.error('Login error:', error);
@@ -117,25 +94,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithWallet = async (walletAddress: string): Promise<boolean> => {
     setIsLoading(true);
     try {
-      await apiCall(() => new Promise(res => setTimeout(res, 1500)));
-      if (!walletAddress) {
-        throw new ApiError('Wallet address required');
-      }
-      const mockUser: User = {
-        id: '2',
-        username: `wallet_${walletAddress.slice(0, 6)}`,
-        email: '',
-        walletAddress,
-        avatar: '/images/avatars/wallet.jpg',
-        bio: 'Connected via Web3 wallet',
-        preferences: {
-          categories: ['DeFi', 'Technology Updates'],
-          notifications: true,
-          newsletter: false,
-        },
-        bookmarks: [],
-      };
-      setUser(mockUser);
+      const data = await apiRequest<User>('/api/login/wallet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress }),
+      });
+      setUser(data);
       return true;
     } catch (error) {
       console.error('Wallet login error:', error);
@@ -148,24 +112,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (userData: { username: string; email: string; password: string }): Promise<boolean> => {
     setIsLoading(true);
     try {
-      await apiCall(() => new Promise(res => setTimeout(res, 1000)));
-      if (!userData.username || !userData.email || !userData.password) {
-        throw new ApiError('Missing fields');
-      }
-      const mockUser: User = {
-        id: Date.now().toString(),
-        username: userData.username,
-        email: userData.email,
-        avatar: '/images/avatars/default.jpg',
-        bio: '',
-        preferences: {
-          categories: [],
-          notifications: true,
-          newsletter: true,
-        },
-        bookmarks: [],
-      };
-      setUser(mockUser);
+      const data = await apiRequest<User>('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userData),
+      });
+      setUser(data);
       return true;
     } catch (error) {
       console.error('Registration error:', error);
@@ -176,18 +128,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    await clearToken();
-    setUser(null);
+    try {
+      await apiRequest('/api/logout', { method: 'POST' });
+    } finally {
+      await clearToken();
+      setUser(null);
+    }
   };
 
   const updateProfile = async (updates: Partial<User>): Promise<boolean> => {
     if (!user) return false;
-    
+
     setIsLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
+      await apiRequest('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+
       setUser(prevUser => ({
         ...prevUser!,
         ...updates,
