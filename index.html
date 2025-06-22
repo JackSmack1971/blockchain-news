@@ -1,15 +1,58 @@
 <!doctype html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Created by MiniMax Agent</title>
+  
+  <!-- SEO Meta Tags -->
+  <title>BlockchainNews - Your Trusted Source for Crypto News</title>
+  <meta name="description" content="Stay updated with the latest blockchain and cryptocurrency news, market analysis, and industry insights from trusted sources." />
+  <meta name="keywords" content="blockchain, cryptocurrency, bitcoin, ethereum, crypto news, market analysis, DeFi, NFT" />
+  <meta name="author" content="BlockchainNews" />
+  
+  <!-- Open Graph Meta Tags -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://blockchainnews.com/" />
+  <meta property="og:title" content="BlockchainNews - Your Trusted Source for Crypto News" />
+  <meta property="og:description" content="Stay updated with the latest blockchain and cryptocurrency news, market analysis, and industry insights from trusted sources." />
+  <meta property="og:site_name" content="BlockchainNews" />
+  
+  <!-- Twitter Card Meta Tags -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://blockchainnews.com/" />
+  <meta name="twitter:title" content="BlockchainNews - Your Trusted Source for Crypto News" />
+  <meta name="twitter:description" content="Stay updated with the latest blockchain and cryptocurrency news, market analysis, and industry insights from trusted sources." />
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="icon" type="image/png" href="/favicon.png" />
+  
+  <!-- Preconnect for better performance -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  
+  <!-- Theme handling -->
+  <script>
+    // Prevent flash of unstyled content
+    try {
+      if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark')
+      } else {
+        document.documentElement.classList.remove('dark')
+      }
+    } catch (_) {}
+  </script>
 </head>
-
 <body>
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
+  
+  <!-- Fallback for JavaScript disabled -->
+  <noscript>
+    <div style="text-align: center; padding: 50px; font-family: system-ui;">
+      <h1>BlockchainNews</h1>
+      <p>Please enable JavaScript to use this application.</p>
+    </div>
+  </noscript>
 </body>
-
 </html>
