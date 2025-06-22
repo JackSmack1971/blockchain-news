@@ -16,7 +16,7 @@ class TokenError extends Error {
 /**
  * Perform a fetch request with timeout and retry logic.
  */
-const apiRequest = async <T>(
+export const apiRequest = async <T>(
   input: RequestInfo | URL,
   init: RequestInit = {},
   retries = 1,
