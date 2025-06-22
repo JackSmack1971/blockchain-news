@@ -52,6 +52,6 @@ describe('profile update', () => {
       .send({ username: '<script>alert(1)</script>evy' })
       .expect(200);
     const after = await agent.get('/api/token').expect(200);
-    expect(after.body.user.username).not.toMatch(/<script>/);
+    expect(after.body.user.username).not.toMatch(/<script/i);
   });
 });
