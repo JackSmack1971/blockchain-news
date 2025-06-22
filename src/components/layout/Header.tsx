@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useTheme } from 'next-themes';
+import { useThemeContext } from '@/contexts/ThemeContext';
 import { 
   Search, 
   Menu, 
@@ -40,7 +40,7 @@ import MarketTicker from './MarketTicker';
 const Header: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme } = useThemeContext();
   const { user, isAuthenticated, logout } = useAuth();
   const { categories } = useData();
   const navigate = useNavigate();
