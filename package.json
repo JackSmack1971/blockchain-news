@@ -48,6 +48,7 @@
     "dompurify": "^3.2.6",
     "dotenv": "^16.5.0",
     "embla-carousel-react": "^8.5.2",
+    "ethers": "^6.8.1",
     "express": "^4.19.2",
     "express-session": "^1.17.3",
     "input-otp": "^1.4.2",

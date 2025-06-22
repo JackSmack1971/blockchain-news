@@ -3,6 +3,8 @@ import session from 'express-session';
 import bcrypt from 'bcryptjs';
 import csurf from 'csurf';
 import dotenv from 'dotenv';
+import crypto from 'crypto';
+import { ethers } from 'ethers';
 import { loginSchema, registerSchema } from '../src/lib/validators';
 
 dotenv.config();
@@ -25,6 +27,17 @@ interface User {
 const users: User[] = [];
 export const resetUsers = (): void => {
   users.length = 0;
+};
+
+interface NonceEntry {
+  nonce: string;
+  expiresAt: number;
+}
+
+const nonceStore = new Map<string, NonceEntry>();
+export const _nonceStore = nonceStore; // test-only export
+export const resetNonces = (): void => {
+  nonceStore.clear();
 };
 
 export const app = express();
@@ -83,6 +96,14 @@ const sanitize = (user: User) => ({
   walletAddress: user.walletAddress,
 });
 
+const createWalletUser = (address: string): User => ({
+  id: crypto.randomUUID(),
+  username: `wallet_${address.slice(0, 6)}`,
+  email: '',
+  passwordHash: '',
+  walletAddress: address,
+});
+
 const requireAuth: express.RequestHandler = (req, res, next) => {
   if (req.session?.user) return next();
   res.status(401).json({ error: 'Unauthorized' });
@@ -118,18 +139,57 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-app.post('/api/login/wallet', (req, res) => {
-  const { walletAddress } = req.body as { walletAddress: string };
-  if (!walletAddress) return res.status(400).json({ error: 'Wallet required' });
-  const user: User = {
-    id: crypto.randomUUID(),
-    username: `wallet_${walletAddress.slice(0, 6)}`,
-    email: '',
-    passwordHash: '',
-    walletAddress,
-  };
-  req.session.user = sanitize(user);
-  res.json(sanitize(user));
+app.post('/api/login/wallet/nonce', (req, res) => {
+  try {
+    const { walletAddress } = req.body as { walletAddress: string };
+    if (!walletAddress) {
+      return res.status(400).json({ error: 'Wallet required' });
+    }
+    let address: string;
+    try {
+      address = ethers.getAddress(walletAddress);
+    } catch {
+      return res.status(400).json({ error: 'Invalid address' });
+    }
+    const nonce = crypto.randomBytes(32).toString('hex');
+    nonceStore.set(address.toLowerCase(), {
+      nonce,
+      expiresAt: Date.now() + 5 * 60 * 1000,
+    });
+    res.json({ nonce });
+  } catch {
+    res.status(400).json({ error: 'Invalid input' });
+  }
+});
+
+app.post('/api/login/wallet', async (req, res) => {
+  try {
+    const { walletAddress, signature } = req.body as {
+      walletAddress: string; signature: string };
+    if (!walletAddress || !signature) {
+      return res.status(400).json({ error: 'Wallet and signature required' });
+    }
+    let address: string;
+    try {
+      address = ethers.getAddress(walletAddress);
+    } catch {
+      return res.status(400).json({ error: 'Invalid address' });
+    }
+    const entry = nonceStore.get(address.toLowerCase());
+    if (!entry || entry.expiresAt < Date.now()) {
+      return res.status(400).json({ error: 'Nonce expired' });
+    }
+    const recovered = ethers.verifyMessage(entry.nonce, signature);
+    if (recovered.toLowerCase() !== address.toLowerCase()) {
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+    nonceStore.delete(address.toLowerCase());
+    const user = createWalletUser(address);
+    req.session.user = sanitize(user);
+    res.json(sanitize(user));
+  } catch {
+    res.status(400).json({ error: 'Invalid input' });
+  }
 });
 
 app.post('/api/logout', (req, res) => {
