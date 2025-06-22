@@ -97,6 +97,38 @@ describe('auth flow', () => {
       .expect(400);
   });
 
+  it('rejects invalid wallet address format', async () => {
+    const agent = request.agent(app);
+    await agent
+      .post('/api/login/wallet/nonce')
+      .send({ walletAddress: '0x123' })
+      .expect(400);
+  });
+
+  it('rejects wallet address with bad checksum', async () => {
+    const agent = request.agent(app);
+    const { Wallet } = await import('ethers');
+    const wallet = Wallet.createRandom();
+    const bad = wallet.address.toUpperCase();
+    await agent.post('/api/login/wallet/nonce').send({ walletAddress: bad }).expect(400);
+  });
+
+  it('normalizes lowercase wallet addresses', async () => {
+    const agent = request.agent(app);
+    const { Wallet } = await import('ethers');
+    const wallet = Wallet.createRandom();
+    const nonceRes = await agent
+      .post('/api/login/wallet/nonce')
+      .send({ walletAddress: wallet.address.toLowerCase() })
+      .expect(200);
+    const sig = await wallet.signMessage(nonceRes.body.nonce);
+    const res = await agent
+      .post('/api/login/wallet')
+      .send({ walletAddress: wallet.address.toLowerCase(), signature: sig })
+      .expect(200);
+    expect(res.body.walletAddress).toBe(wallet.address);
+  });
+
   it('rate limits login attempts', async () => {
     const agent = request.agent(app);
     for (let i = 0; i < 10; i++) {
