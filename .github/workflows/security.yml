@@ -12,6 +12,22 @@ permissions:
 jobs:
   security:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        ports: [5432:5432]
+        env:
+          POSTGRES_USER: appuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: appdb
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://appuser:testpass@localhost:5432/appdb
+      SESSION_SECRET: test_session_secret_long_enough_for_tests
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3

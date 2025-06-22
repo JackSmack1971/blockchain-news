@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     environmentMatchGlobs: [['server/**', 'node']],
+    threads: false,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
