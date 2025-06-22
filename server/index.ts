@@ -14,7 +14,8 @@ import {
   createUser,
   findUserByEmail,
   findUserByWallet,
-  clearUsers,
+  resetDatabase,
+  closePool,
 } from './db';
 
 dotenv.config();
@@ -60,7 +61,7 @@ interface User {
 }
 
 export const resetUsers = async (): Promise<void> => {
-  await clearUsers();
+  await resetDatabase();
 };
 
 interface NonceEntry {
@@ -82,6 +83,10 @@ const loginAttempts = new Map<string, AttemptInfo>();
 export const _loginAttempts = loginAttempts; // test-only export
 export const resetLoginAttempts = (): void => {
   loginAttempts.clear();
+};
+
+export const shutdown = async (): Promise<void> => {
+  await closePool();
 };
 
 export const app = express();

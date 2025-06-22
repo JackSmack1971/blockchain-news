@@ -32,6 +32,19 @@ export async function initDb(): Promise<void> {
   }
 }
 
+export async function resetDatabase(): Promise<void> {
+  try {
+    await pool.query('DROP TABLE IF EXISTS users CASCADE');
+    await initDb();
+  } catch (err) {
+    throw new DatabaseError('Failed to reset database', err);
+  }
+}
+
+export async function closePool(): Promise<void> {
+  await pool.end();
+}
+
 export async function backupDatabase(path: string): Promise<void> {
   const { exec } = await import('node:child_process');
   return new Promise((resolve, reject) => {
