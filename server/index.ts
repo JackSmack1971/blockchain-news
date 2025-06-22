@@ -164,19 +164,19 @@ app.use(enforceHttps);
 app.use(express.json());
 
 // Security headers middleware applied early in the pipeline
+const CSP_HEADER =
+  "default-src 'self'; " +
+  "script-src 'self' 'unsafe-inline'; " +
+  "style-src 'self' 'unsafe-inline'; " +
+  "img-src 'self' data: https:; " +
+  "connect-src 'self'";
+
 app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader(
-    'Content-Security-Policy',
-    "default-src 'self'; " +
-      "script-src 'self' 'unsafe-inline'; " +
-      "style-src 'self' 'unsafe-inline'; " +
-      "img-src 'self' data: https:; " +
-      "connect-src 'self'"
-  );
+  res.setHeader('Content-Security-Policy', CSP_HEADER);
   res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
   res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
@@ -381,6 +381,19 @@ app.post('/api/profile', requireAuth, (req, res) => {
   });
   Object.assign(req.session.user, profileUpdates);
   res.json({ success: true });
+});
+
+// Custom 404 handler to ensure consistent security headers
+app.use('*', (req, res) => {
+  res.setHeader('Content-Security-Policy', CSP_HEADER);
+  res.status(404).json({ error: 'Not found' });
+});
+
+// Error handler to prevent Express from overriding security headers
+app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('Unhandled error:', err);
+  res.setHeader('Content-Security-Policy', CSP_HEADER);
+  res.status(500).json({ error: 'Internal Server Error' });
 });
 
 if (require.main === module) {
