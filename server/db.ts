@@ -20,6 +20,7 @@ export async function initDb(): Promise<void> {
   if (initPromise) return initPromise;
   initPromise = (async () => {
     try {
+      await pool.query('DROP TYPE IF EXISTS users CASCADE');
       await pool.query('DROP TABLE IF EXISTS users CASCADE');
       await pool.query(`CREATE TABLE IF NOT EXISTS users (
       id UUID PRIMARY KEY,
