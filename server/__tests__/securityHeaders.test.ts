@@ -1,9 +1,9 @@
 import { describe, it, beforeEach, expect } from 'vitest';
 import request from 'supertest';
 
-process.env.SESSION_SECRET = 'test-secret';
+process.env.SESSION_SECRET = 'a-very-long-and-secure-session-secret-key';
 process.env.RATE_LIMIT_MAX = '10';
-process.env.RATE_LIMIT_WINDOW_MS = '1000';
+process.env.RATE_LIMIT_WINDOW = '1000';
 process.env.DATABASE_URL = 'postgresql://appuser:testpass@localhost/appdb';
 const { app, resetUsers, resetNonces, _authLimiter } = await import('../index.ts');
 
