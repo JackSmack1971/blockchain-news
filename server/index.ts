@@ -241,8 +241,28 @@ app.get('/api/protected', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
+/**
+ * Sanitize untrusted string input to prevent injection attacks.
+ * Simple replacement of angle brackets is used to neutralize HTML.
+ *
+ * @param input - Raw user provided value
+ * @returns Sanitized string safe for storage
+ */
+const sanitizeInput = (input: unknown): string => {
+  if (typeof input !== 'string') return '';
+  return input.replace(/[<>]/g, '').trim();
+};
+
+const allowedProfileFields = ['username', 'email', 'bio', 'avatar', 'displayName'] as const;
+
 app.post('/api/profile', requireAuth, (req, res) => {
-  Object.assign(req.session.user, req.body);
+  const profileUpdates: Record<string, string> = {};
+  allowedProfileFields.forEach(field => {
+    if (req.body[field] !== undefined) {
+      profileUpdates[field] = sanitizeInput(req.body[field]);
+    }
+  });
+  Object.assign(req.session.user, profileUpdates);
   res.json({ success: true });
 });
 
