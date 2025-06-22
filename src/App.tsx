@@ -1,5 +1,4 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { ThemeProvider } from 'next-themes';
 import { Toaster } from 'sonner';
 import './index.css';
 
@@ -19,10 +18,11 @@ import AboutPage from './components/pages/AboutPage';
 // Context Providers
 import { AuthProvider } from './contexts/AuthContext';
 import { DataProvider } from './contexts/DataContext';
+import { ThemeProvider } from './contexts/ThemeContext'; // Custom theme provider
 
 function App() {
   return (
-    <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+    <ThemeProvider>
       <AuthProvider>
         <DataProvider>
           <Router>
