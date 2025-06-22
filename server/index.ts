@@ -3,6 +3,7 @@ import session from 'express-session';
 import rateLimit, { MemoryStore } from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import csurf from 'csurf';
+import cors from 'cors';
 import dotenv from 'dotenv';
 import { validateEnvironment } from './config/environment';
 import crypto from 'crypto';
@@ -92,6 +93,14 @@ export const shutdown = async (): Promise<void> => {
 export const app = express();
 app.enable('trust proxy');
 
+const corsOptions = {
+  origin: config.FRONTEND_URL,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+app.use(cors(corsOptions));
+
 const authLimiter = rateLimit({
   windowMs: RATE_LIMIT_WINDOW_MS,
   max: RATE_LIMIT_MAX,
@@ -131,6 +140,12 @@ export const validateWalletAddress: express.RequestHandler = (req, res, next) =>
     return res.status(400).json({ error: validation.error });
   }
   req.body.walletAddress = validation.address;
+  next();
+}; 
+
+export const authSecurityHeaders: express.RequestHandler = (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Pragma', 'no-cache');
   next();
 };
 
@@ -177,6 +192,11 @@ app.use(
     saveUninitialized: false,
     cookie: cookieOptions,
   }),
+);
+
+app.use(
+  ['/api/register', '/api/login', '/api/login/wallet', '/api/login/wallet/nonce'],
+  authSecurityHeaders,
 );
 
 // Enable CSRF protection except during automated testing

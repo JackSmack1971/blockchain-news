@@ -25,6 +25,7 @@ export const environmentSchema = z.object({
     .transform(Number)
     .default('900000'),
   RATE_LIMIT_MAX: z.string().regex(/^\d+$/).transform(Number).default('100'),
+  FRONTEND_URL: z.string().url().default('http://localhost:3000'),
   REDIS_URL: z.string().url().optional(),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
 });
