@@ -8,6 +8,13 @@ import crypto from 'crypto';
 import { ethers } from 'ethers';
 import { loginSchema, registerSchema } from '../src/lib/validators';
 import fs from 'fs/promises';
+import {
+  initDb,
+  createUser,
+  findUserByEmail,
+  findUserByWallet,
+  clearUsers,
+} from './db';
 
 dotenv.config();
 
@@ -45,6 +52,7 @@ if (!SESSION_SECRET) {
 if (!Number.isFinite(RATE_LIMIT_WINDOW_MS) || !Number.isFinite(RATE_LIMIT_MAX)) {
   throw new Error('Invalid rate limit configuration');
 }
+await initDb();
 
 interface User {
   id: string;
@@ -54,9 +62,8 @@ interface User {
   walletAddress?: string;
 }
 
-const users: User[] = [];
-export const resetUsers = (): void => {
-  users.length = 0;
+export const resetUsers = async (): Promise<void> => {
+  await clearUsers();
 };
 
 interface NonceEntry {
@@ -184,12 +191,13 @@ const requireAuth: express.RequestHandler = (req, res, next) => {
 app.post('/api/register', authLimiter, async (req, res) => {
   try {
     const { username, email, password } = registerSchema.parse(req.body);
-    if (users.some(u => u.email === email)) {
+    const exists = await findUserByEmail(email);
+    if (exists) {
       return res.status(400).json({ error: 'User exists' });
     }
     const passwordHash = await bcrypt.hash(password, 10);
     const user: User = { id: crypto.randomUUID(), username, email, passwordHash };
-    users.push(user);
+    await createUser(user);
     req.session.user = sanitize(user);
     res.json(sanitize(user));
   } catch {
@@ -206,7 +214,7 @@ app.post('/api/login', authLimiter, async (req, res) => {
       await new Promise(r => setTimeout(r, Math.random() * 50));
       return res.status(403).json({ error: 'Account locked' });
     }
-    const user = users.find(u => u.email === email);
+    const user = await findUserByEmail(email);
     const hashToCompare =
       user?.passwordHash || '$2b$10$dummy.hash.for.timing.consistency.protection.only';
     const isPasswordValid = await bcrypt.compare(password, hashToCompare);
@@ -272,7 +280,11 @@ app.post('/api/login/wallet', authLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Invalid signature' });
     }
     nonceStore.delete(address.toLowerCase());
-    const user = createWalletUser(address);
+    let user = await findUserByWallet(address);
+    if (!user) {
+      user = createWalletUser(address);
+      await createUser(user);
+    }
     req.session.user = sanitize(user);
     res.json(sanitize(user));
   } catch {
