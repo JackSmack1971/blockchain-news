@@ -7,12 +7,20 @@ export class DatabaseError extends Error {
   }
 }
 
-const connStr = process.env.DATABASE_URL;
-if (!connStr) {
+const baseConnStr = process.env.NODE_ENV === 'test'
+  ? process.env.DATABASE_URL_TEST || process.env.DATABASE_URL
+  : process.env.DATABASE_URL;
+if (!baseConnStr) {
   throw new DatabaseError('DATABASE_URL is required');
 }
 
-export const pool = new Pool({ connectionString: connStr, idleTimeoutMillis: 30000, max: 10 });
+export const pool = new Pool({
+  connectionString: baseConnStr,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
 
 export async function initDb(): Promise<void> {
   try {
@@ -48,7 +56,7 @@ export async function closePool(): Promise<void> {
 export async function backupDatabase(path: string): Promise<void> {
   const { exec } = await import('node:child_process');
   return new Promise((resolve, reject) => {
-    exec(`pg_dump ${connStr} > ${path}`, err => {
+    exec(`pg_dump ${baseConnStr} > ${path}`, err => {
       if (err) reject(new DatabaseError('Backup failed', err));
       else resolve();
     });
@@ -58,7 +66,7 @@ export async function backupDatabase(path: string): Promise<void> {
 export async function restoreDatabase(path: string): Promise<void> {
   const { exec } = await import('node:child_process');
   return new Promise((resolve, reject) => {
-    exec(`psql ${connStr} < ${path}`, err => {
+    exec(`psql ${baseConnStr} < ${path}`, err => {
       if (err) reject(new DatabaseError('Restore failed', err));
       else resolve();
     });
@@ -95,5 +103,22 @@ export async function findUserByWallet(address: string): Promise<any | null> {
     return res.rows[0] || null;
   } catch (err) {
     throw new DatabaseError('Failed to fetch wallet user', err);
+  }
+}
+
+export async function withTransaction<T>(
+  fn: (client: import('pg').PoolClient) => Promise<T>
+): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw new DatabaseError('Transaction failed', err);
+  } finally {
+    client.release();
   }
 }
