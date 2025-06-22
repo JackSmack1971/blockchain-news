@@ -26,13 +26,14 @@ export const resetUsers = (): void => {
 
 export const app = express();
 app.use(express.json());
+const isProd = process.env.NODE_ENV === 'production';
 app.use(
   session({
     name: 'sid',
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: { httpOnly: true, secure: false },
+    cookie: { httpOnly: true, secure: isProd, sameSite: 'lax' },
   }),
 );
 
