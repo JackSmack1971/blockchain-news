@@ -3,12 +3,13 @@ import request from 'supertest';
 process.env.SESSION_SECRET = 'test-secret';
 process.env.RATE_LIMIT_MAX = '10';
 process.env.RATE_LIMIT_WINDOW_MS = '1000';
-const { app, resetUsers, resetNonces, _nonceStore, _authLimiter } = await import('../index.ts');
+const { app, resetUsers, resetNonces, resetLoginAttempts, _nonceStore, _authLimiter } = await import('../index.ts');
 
 describe('auth flow', () => {
   beforeEach(() => {
     resetUsers();
     resetNonces();
+    resetLoginAttempts();
     _authLimiter.resetKey('::ffff:127.0.0.1');
     _authLimiter.resetKey('127.0.0.1');
   });
@@ -104,5 +105,44 @@ describe('auth flow', () => {
       .post('/api/login')
       .send({ email: 'x@x.com', password: 'a' })
       .expect(429);
+  });
+
+  it('locks account after repeated failed logins', async () => {
+    const agent = request.agent(app);
+    await agent
+      .post('/api/register')
+      .send({ username: 'lock', email: 'lock@test.com', password: 'Secret1!', confirmPassword: 'Secret1!' })
+      .expect(200);
+    for (let i = 0; i < 5; i++) {
+      await agent
+        .post('/api/login')
+        .send({ email: 'lock@test.com', password: 'Wrong123!' })
+        .expect(401);
+    }
+    await agent
+      .post('/api/login')
+      .send({ email: 'lock@test.com', password: 'Wrong123!' })
+      .expect(403);
+  });
+
+  it('performs constant-time login to prevent enumeration', async () => {
+    const agent = request.agent(app);
+    await agent
+      .post('/api/register')
+      .send({ username: 'timing', email: 't@test.com', password: 'Secret1!', confirmPassword: 'Secret1!' })
+      .expect(200);
+    const start1 = Date.now();
+    await agent
+      .post('/api/login')
+      .send({ email: 't@test.com', password: 'Wrong123!' })
+      .expect(401);
+    const durationExisting = Date.now() - start1;
+    const start2 = Date.now();
+    await agent
+      .post('/api/login')
+      .send({ email: 'nosuch@test.com', password: 'Wrong123!' })
+      .expect(401);
+    const durationNon = Date.now() - start2;
+    expect(Math.abs(durationExisting - durationNon)).toBeLessThan(200);
   });
 });

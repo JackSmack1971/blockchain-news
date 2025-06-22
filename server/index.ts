@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import crypto from 'crypto';
 import { ethers } from 'ethers';
 import { loginSchema, registerSchema } from '../src/lib/validators';
+import fs from 'fs/promises';
 
 dotenv.config();
 
@@ -67,6 +68,16 @@ const nonceStore = new Map<string, NonceEntry>();
 export const _nonceStore = nonceStore; // test-only export
 export const resetNonces = (): void => {
   nonceStore.clear();
+};
+
+interface AttemptInfo {
+  count: number;
+  lockUntil: number;
+}
+const loginAttempts = new Map<string, AttemptInfo>();
+export const _loginAttempts = loginAttempts; // test-only export
+export const resetLoginAttempts = (): void => {
+  loginAttempts.clear();
 };
 
 export const app = express();
@@ -156,6 +167,15 @@ const createWalletUser = (address: string): User => ({
   walletAddress: address,
 });
 
+const logSecurityEvent = async (msg: string): Promise<void> => {
+  try {
+    await fs.mkdir('logs', { recursive: true });
+    await fs.appendFile('logs/security.log', `${new Date().toISOString()} ${msg}\n`);
+  } catch (err) {
+    console.error('Failed to write security log', err);
+  }
+};
+
 const requireAuth: express.RequestHandler = (req, res, next) => {
   if (req.session?.user) return next();
   res.status(401).json({ error: 'Unauthorized' });
@@ -179,13 +199,29 @@ app.post('/api/register', authLimiter, async (req, res) => {
 
 app.post('/api/login', authLimiter, async (req, res) => {
   try {
-    const { email, password } = loginSchema.parse(req.body);
+    const { email, password } = loginSchema.parse(req.body),
+      attempt = loginAttempts.get(email) || { count: 0, lockUntil: 0 };
+    if (attempt.lockUntil > Date.now()) {
+      await logSecurityEvent(`Locked login attempt for ${email}`);
+      await new Promise(r => setTimeout(r, Math.random() * 50));
+      return res.status(403).json({ error: 'Account locked' });
+    }
     const user = users.find(u => u.email === email);
-    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+    const hashToCompare =
+      user?.passwordHash || '$2b$10$dummy.hash.for.timing.consistency.protection.only';
+    const isPasswordValid = await bcrypt.compare(password, hashToCompare);
+    if (!user || !user.id || !isPasswordValid) {
+      if (++attempt.count >= 5) {
+        attempt.lockUntil = Date.now() + 15 * 60 * 1000;
+        await logSecurityEvent(`Account locked for ${email}`);
+      }
+      loginAttempts.set(email, attempt); await new Promise(r => setTimeout(r, Math.random() * 50));
+      await logSecurityEvent(`Failed login for ${email}`);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-    req.session.user = sanitize(user);
-    res.json(sanitize(user));
+      loginAttempts.delete(email); req.session.user = sanitize(user);
+      await logSecurityEvent(`Successful login for ${email}`);
+      res.json({ message: 'Login successful', user: sanitize(user) });
   } catch {
     res.status(400).json({ error: 'Invalid input' });
   }
