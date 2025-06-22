@@ -18,7 +18,7 @@ import AboutPage from './components/pages/AboutPage';
 // Context Providers
 import { AuthProvider } from './contexts/AuthContext';
 import { DataProvider } from './contexts/DataContext';
-import { ThemeProvider } from './contexts/ThemeContext'; // Custom theme provider
+import { ThemeProvider } from '@/contexts/ThemeContext';
 
 function App() {
   return (
