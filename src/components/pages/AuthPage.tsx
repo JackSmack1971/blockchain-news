@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { loginSchema, registerSchema } from '@/lib/validators';
+import { logError } from '@/lib/errors';
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
@@ -110,7 +111,7 @@ const AuthPage: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('Wallet connection error:', error);
+      logError(error, 'walletConnect');
       toast.error('Failed to connect wallet. Please try again.');
     } finally {
       setIsConnectingWallet(false);
