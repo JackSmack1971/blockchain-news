@@ -59,3 +59,18 @@ describe('registerSchema', () => {
     expect(result.success).toBe(false);
   });
 });
+
+it('fails when email missing', () => {
+  const result = loginSchema.safeParse({ password: 'Abcdef1!' });
+  expect(result.success).toBe(false);
+});
+
+it('fails on short username', () => {
+  const result = registerSchema.safeParse({
+    username: 'a',
+    email: 'a@b.com',
+    password: 'Abcdef1!',
+    confirmPassword: 'Abcdef1!',
+  });
+  expect(result.success).toBe(false);
+});
