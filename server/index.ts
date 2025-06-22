@@ -28,6 +28,20 @@ export const resetUsers = (): void => {
 };
 
 export const app = express();
+app.enable('trust proxy');
+
+/**
+ * Redirect HTTP traffic to HTTPS when in production.
+ */
+export const enforceHttps: express.RequestHandler = (req, res, next) => {
+  const host = req.headers.host;
+  if (isProd && !req.secure && host) {
+    return res.redirect(301, `https://${host}${req.originalUrl}`);
+  }
+  next();
+};
+
+app.use(enforceHttps);
 app.use(express.json());
 const isProd = process.env.NODE_ENV === 'production';
 const cookieName = isProd ? '__Secure-sid' : 'sid';

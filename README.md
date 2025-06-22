@@ -186,6 +186,8 @@ The application works out of the box with mock data. For production, configure:
 - Authentication backend
 - Database for user management
 - CDN for image assets
+- HTTPS termination at your proxy or load balancer. The app enforces HTTPS in
+  production and will redirect insecure requests.
 
 ## 📈 Future Enhancements
 
