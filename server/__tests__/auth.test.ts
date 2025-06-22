@@ -3,11 +3,12 @@ import request from 'supertest';
 process.env.SESSION_SECRET = 'test-secret';
 process.env.RATE_LIMIT_MAX = '10';
 process.env.RATE_LIMIT_WINDOW_MS = '1000';
+process.env.DATABASE_URL = 'postgresql://appuser:testpass@localhost/appdb';
 const { app, resetUsers, resetNonces, resetLoginAttempts, _nonceStore, _authLimiter } = await import('../index.ts');
 
 describe('auth flow', () => {
-  beforeEach(() => {
-    resetUsers();
+  beforeEach(async () => {
+    await resetUsers();
     resetNonces();
     resetLoginAttempts();
     _authLimiter.resetKey('::ffff:127.0.0.1');
