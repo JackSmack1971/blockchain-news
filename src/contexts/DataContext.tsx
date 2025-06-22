@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { logError } from '@/lib/errors';
 
 interface Article {
   id: string;
@@ -135,7 +136,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setTrendingTopics(trendingData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
-      console.error('Error loading data:', err);
+      logError(err, 'loadInitialData');
     } finally {
       setIsLoading(false);
     }
@@ -160,7 +161,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setMarketData(updatedMarketData);
       }
     } catch (err) {
-      console.error('Error refreshing market data:', err);
+      logError(err, 'refreshMarketData');
     }
   };
 

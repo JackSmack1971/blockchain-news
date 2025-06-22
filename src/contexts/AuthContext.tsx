@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getToken, setToken, clearToken, apiRequest } from '@/lib/authToken';
+import { logError } from '@/lib/errors';
 
 interface User {
   id: string;
@@ -27,6 +28,7 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  error: string | null;
   login: (email: string, password: string) => Promise<boolean>;
   loginWithWallet: (walletAddress: string) => Promise<boolean>;
   register: (userData: { username: string; email: string; password: string }) => Promise<boolean>;
@@ -50,6 +52,7 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Initialize auth state from secure token
   useEffect(() => {
@@ -75,6 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string): Promise<boolean> => {
     setIsLoading(true);
+    setError(null);
     try {
       const data = await apiRequest<User>('/api/login', {
         method: 'POST',
@@ -84,7 +88,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(data);
       return true;
     } catch (error) {
-      console.error('Login error:', error);
+      setError('Unable to login. Please try again.');
+      logError(error, 'login');
       return false;
     } finally {
       setIsLoading(false);
@@ -93,6 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loginWithWallet = async (walletAddress: string): Promise<boolean> => {
     setIsLoading(true);
+    setError(null);
     try {
       const data = await apiRequest<User>('/api/login/wallet', {
         method: 'POST',
@@ -102,7 +108,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(data);
       return true;
     } catch (error) {
-      console.error('Wallet login error:', error);
+      setError('Wallet login failed.');
+      logError(error, 'loginWithWallet');
       return false;
     } finally {
       setIsLoading(false);
@@ -111,6 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const register = async (userData: { username: string; email: string; password: string }): Promise<boolean> => {
     setIsLoading(true);
+    setError(null);
     try {
       const data = await apiRequest<User>('/api/register', {
         method: 'POST',
@@ -120,7 +128,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(data);
       return true;
     } catch (error) {
-      console.error('Registration error:', error);
+      setError('Registration failed.');
+      logError(error, 'register');
       return false;
     } finally {
       setIsLoading(false);
@@ -128,8 +137,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    setError(null);
     try {
       await apiRequest('/api/logout', { method: 'POST' });
+    } catch (error) {
+      logError(error, 'logout');
     } finally {
       await clearToken();
       setUser(null);
@@ -140,6 +152,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return false;
 
     setIsLoading(true);
+    setError(null);
     try {
       await apiRequest('/api/profile', {
         method: 'POST',
@@ -153,7 +166,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }));
       return true;
     } catch (error) {
-      console.error('Profile update error:', error);
+      setError('Profile update failed.');
+      logError(error, 'updateProfile');
       return false;
     } finally {
       setIsLoading(false);
@@ -187,6 +201,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user,
     isAuthenticated: !!user,
     isLoading,
+    error,
     login,
     loginWithWallet,
     register,
