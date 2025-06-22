@@ -286,7 +286,12 @@ app.post('/api/login/wallet/nonce', authLimiter, validateWalletAddress, (req, re
 
 app.post('/api/login/wallet', authLimiter, validateWalletAddress, async (req, res) => {
   try {
-    const { walletAddress, signature } = walletLoginSchema.parse(req.body);
+    const { walletAddress } = req.body as { walletAddress: string };
+    const { signature } = req.body as { signature?: string };
+    if (!signature) {
+      return res.status(400).json({ error: 'signature required' });
+    }
+    walletLoginSchema.pick({ signature: true }).parse({ signature });
     const entry = nonceStore.get(walletAddress.toLowerCase());
     if (!entry || entry.expiresAt < Date.now()) {
       return res.status(400).json({ error: 'Nonce expired' });
