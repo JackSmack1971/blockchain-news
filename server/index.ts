@@ -10,6 +10,7 @@ import { ethers } from 'ethers';
 import { loginSchema, registerSchema, walletLoginSchema } from '../src/lib/validators';
 import { logSecurityEvent } from './middleware/security-logger';
 import { register as metricsRegister, recordFailedLogin } from './monitoring/metrics';
+import { ZodError } from 'zod';
 import {
   initDb,
   createUser,
@@ -211,8 +212,13 @@ app.post('/api/register', authLimiter, async (req, res) => {
     await createUser(user);
     req.session.user = sanitize(user);
     res.json(sanitize(user));
-  } catch {
-    res.status(400).json({ error: 'Invalid input' });
+  } catch (err) {
+    if (err instanceof ZodError) {
+      res.status(400).json({ error: 'Invalid input' });
+    } else {
+      logSecurityEvent('LOGIN_ERROR', { message: (err as Error).message }, req);
+      res.status(500).json({ error: 'Server error' });
+    }
   }
 });
 
@@ -243,8 +249,13 @@ app.post('/api/login', authLimiter, async (req, res) => {
       loginAttempts.delete(email); req.session.user = sanitize(user);
       await logSecurityEvent(`Successful login for ${email}`);
       res.json({ message: 'Login successful', user: sanitize(user) });
-  } catch {
-    res.status(400).json({ error: 'Invalid input' });
+  } catch (err) {
+    if (err instanceof ZodError) {
+      res.status(400).json({ error: 'Invalid input' });
+    } else {
+      logSecurityEvent('LOGIN_ERROR', { message: (err as Error).message }, req);
+      res.status(500).json({ error: 'Server error' });
+    }
   }
 });
 
