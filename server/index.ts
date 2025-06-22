@@ -164,12 +164,14 @@ app.use(enforceHttps);
 app.use(express.json());
 
 // Security headers middleware applied early in the pipeline
-const CSP_HEADER =
-  "default-src 'self'; " +
-  "script-src 'self' 'unsafe-inline'; " +
-  "style-src 'self' 'unsafe-inline'; " +
-  "img-src 'self' data: https:; " +
-  "connect-src 'self'";
+// CSP allows blockchain APIs and inlined styles/scripts for Vite in dev mode
+const CSP_HEADER = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: https:",
+  "connect-src 'self' https://api.coingecko.com",
+].join('; ');
 
 app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY');
@@ -180,6 +182,14 @@ app.use((req, res, next) => {
   res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
   res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader(
+    'Strict-Transport-Security',
+    'max-age=63072000; includeSubDomains; preload',
+  );
+  res.setHeader(
+    'Permissions-Policy',
+    'geolocation=(), microphone=(), camera=()',
+  );
   next();
 });
 const isProd = config.NODE_ENV === 'production';
