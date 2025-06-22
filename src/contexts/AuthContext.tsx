@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { getToken, setToken, clearToken } from '@/lib/authToken';
 
 interface User {
   id: string;
@@ -14,6 +15,24 @@ interface User {
   bookmarks?: string[];
   walletAddress?: string;
 }
+
+class ApiError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+const apiCall = async <T>(fn: () => Promise<T>, retries = 1): Promise<T> => {
+  try {
+    return await fn();
+  } catch (error) {
+    if (retries > 0) {
+      return apiCall(fn, retries - 1);
+    }
+    throw new ApiError((error as Error).message);
+  }
+};
 
 interface AuthContextType {
   user: User | null;
@@ -43,54 +62,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Initialize auth state from localStorage
+  // Initialize auth state from secure token
   useEffect(() => {
-    const savedUser = localStorage.getItem('blockchain-news-user');
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch (error) {
-        console.error('Error parsing saved user:', error);
-        localStorage.removeItem('blockchain-news-user');
-      }
+    const stored = getToken<User>();
+    if (stored) {
+      setUser(stored.user);
     }
     setIsLoading(false);
   }, []);
 
-  // Save user to localStorage whenever user state changes
+  // Persist token when user state changes
   useEffect(() => {
     if (user) {
-      localStorage.setItem('blockchain-news-user', JSON.stringify(user));
+      setToken<User>({ user });
     } else {
-      localStorage.removeItem('blockchain-news-user');
+      clearToken();
     }
   }, [user]);
 
   const login = async (email: string, password: string): Promise<boolean> => {
     setIsLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock successful login
-      if (email && password) {
-        const mockUser: User = {
-          id: '1',
-          username: email.split('@')[0],
-          email,
-          avatar: '/images/avatars/default.jpg',
-          bio: 'Blockchain enthusiast and crypto investor',
-          preferences: {
-            categories: ['Market Analysis', 'DeFi'],
-            notifications: true,
-            newsletter: true,
-          },
-          bookmarks: [],
-        };
-        setUser(mockUser);
-        return true;
+      await apiCall(() => new Promise(res => setTimeout(res, 1000)));
+      if (!email || !password) {
+        throw new ApiError('Missing credentials');
       }
-      return false;
+      const mockUser: User = {
+        id: '1',
+        username: email.split('@')[0],
+        email,
+        avatar: '/images/avatars/default.jpg',
+        bio: 'Blockchain enthusiast and crypto investor',
+        preferences: {
+          categories: ['Market Analysis', 'DeFi'],
+          notifications: true,
+          newsletter: true,
+        },
+        bookmarks: [],
+      };
+      setUser(mockUser);
+      return true;
     } catch (error) {
       console.error('Login error:', error);
       return false;
@@ -102,9 +113,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithWallet = async (walletAddress: string): Promise<boolean> => {
     setIsLoading(true);
     try {
-      // Simulate wallet connection
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
+      await apiCall(() => new Promise(res => setTimeout(res, 1500)));
+      if (!walletAddress) {
+        throw new ApiError('Wallet address required');
+      }
       const mockUser: User = {
         id: '2',
         username: `wallet_${walletAddress.slice(0, 6)}`,
@@ -132,9 +144,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (userData: { username: string; email: string; password: string }): Promise<boolean> => {
     setIsLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      await apiCall(() => new Promise(res => setTimeout(res, 1000)));
+      if (!userData.username || !userData.email || !userData.password) {
+        throw new ApiError('Missing fields');
+      }
       const mockUser: User = {
         id: Date.now().toString(),
         username: userData.username,
@@ -159,6 +172,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    clearToken();
     setUser(null);
   };
 

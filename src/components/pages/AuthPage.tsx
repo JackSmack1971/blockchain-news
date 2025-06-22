@@ -9,6 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { loginSchema, registerSchema } from '@/lib/validators';
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
@@ -38,13 +39,14 @@ const AuthPage: React.FC = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!loginForm.email || !loginForm.password) {
-      toast.error('Please fill in all fields');
+
+    const parsed = loginSchema.safeParse(loginForm);
+    if (!parsed.success) {
+      toast.error(parsed.error.errors[0].message);
       return;
     }
 
-    const success = await login(loginForm.email, loginForm.password);
+    const success = await login(parsed.data.email, parsed.data.password);
     
     if (success) {
       toast.success('Successfully logged in!');
@@ -56,27 +58,15 @@ const AuthPage: React.FC = () => {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!registerForm.username || !registerForm.email || !registerForm.password) {
-      toast.error('Please fill in all fields');
+
+    const parsed = registerSchema.safeParse(registerForm);
+    if (!parsed.success) {
+      toast.error(parsed.error.errors[0].message);
       return;
     }
 
-    if (registerForm.password !== registerForm.confirmPassword) {
-      toast.error('Passwords do not match');
-      return;
-    }
-
-    if (registerForm.password.length < 6) {
-      toast.error('Password must be at least 6 characters long');
-      return;
-    }
-
-    const success = await register({
-      username: registerForm.username,
-      email: registerForm.email,
-      password: registerForm.password,
-    });
+    const { username, email, password } = parsed.data;
+    const success = await register({ username, email, password });
     
     if (success) {
       toast.success('Account created successfully!');
