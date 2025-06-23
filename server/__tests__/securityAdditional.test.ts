@@ -176,7 +176,8 @@ describe('Security Tests', () => {
 
     it('sets CSP header on 404 responses', async () => {
       const res = await request(app).get('/no-such-route');
-      expect(res.headers['content-security-policy']).toContain("default-src 'self'");
+      expect(res.headers['content-security-policy']).toMatch(/nonce-/);
+      expect(res.headers['content-security-policy']).toContain('strict-dynamic');
       expect(res.status).toBe(404);
     });
   });
