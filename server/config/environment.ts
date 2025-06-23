@@ -27,6 +27,8 @@ export const environmentSchema = z.object({
   RATE_LIMIT_MAX: z.string().regex(/^\d+$/).transform(Number).default('5'),
   FRONTEND_URL: z.string().url().default('http://localhost:3000'),
   REDIS_URL: z.string().url().optional(),
+  SIGNIN_DOMAIN: z.string().min(1),
+  SIGNIN_CHAIN_ID: z.string().regex(/^\d+$/).transform(Number),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
 });
 

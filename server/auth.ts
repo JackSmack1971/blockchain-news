@@ -3,7 +3,9 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { ethers } from 'ethers';
 import rateLimit, { MemoryStore } from 'express-rate-limit';
-import { loginSchema, registerSchema, walletLoginSchema } from '../src/lib/validators';
+import { loginSchema, registerSchema } from '../src/lib/validators';
+import { z } from 'zod';
+import { verifyEip4361Signature, Web3AuthError } from './utils/web3Auth';
 import { logSecurityEvent } from './logging';
 import { createUser, findUserByEmail, findUserByWallet } from './db';
 
@@ -151,35 +153,30 @@ authRouter.post('/login/wallet/nonce', validateWalletAddress, (req, res) => {
   }
 });
 
-authRouter.post('/login/wallet', validateWalletAddress, async (req, res) => {
+authRouter.post('/login/wallet', async (req, res) => {
   try {
-    const { walletAddress } = req.body as { walletAddress: string };
-    const { signature } = req.body as { signature?: string };
-    if (!signature) {
-      return res.status(400).json({ error: 'signature required' });
-    }
-    walletLoginSchema.pick({ signature: true }).parse({ signature });
-    const entry = nonceStore.get(walletAddress.toLowerCase());
-    if (!entry || entry.expiresAt < Date.now()) {
-      await logSecurityEvent('failed_login', { walletAddress, ip: req.ip, reason: 'nonce_expired' });
+    const { message, signature } = z
+      .object({ message: z.string().min(1), signature: z.string().min(1) })
+      .parse(req.body);
+    const parsed = await verifyEip4361Signature(message, signature);
+    const entry = nonceStore.get(parsed.address.toLowerCase());
+    if (!entry || entry.expiresAt < Date.now() || entry.nonce !== parsed.nonce) {
+      await logSecurityEvent('failed_login', { walletAddress: parsed.address, ip: req.ip, reason: 'nonce_expired' });
       return res.status(400).json({ error: 'Nonce expired' });
     }
-    const recovered = ethers.verifyMessage(entry.nonce, signature);
-    if (recovered.toLowerCase() !== walletAddress.toLowerCase()) {
-      await logSecurityEvent('failed_login', { walletAddress, ip: req.ip, reason: 'invalid_signature' });
-      return res.status(401).json({ error: 'Invalid signature' });
-    }
-    nonceStore.delete(walletAddress.toLowerCase());
-    let user = await findUserByWallet(walletAddress);
+    nonceStore.delete(parsed.address.toLowerCase());
+    let user = await findUserByWallet(parsed.address);
     if (!user) {
-      user = { id: crypto.randomUUID(), username: `wallet_${walletAddress.slice(0, 6)}`, email: '', passwordHash: '', walletAddress };
+      user = { id: crypto.randomUUID(), username: `wallet_${parsed.address.slice(0, 6)}`, email: '', passwordHash: '', walletAddress: parsed.address };
       await createUser(user);
     }
     req.session.user = { id: user.id, username: user.username, email: user.email, walletAddress: user.walletAddress };
-    await logSecurityEvent('login_success', { walletAddress, ip: req.ip });
+    await logSecurityEvent('login_success', { walletAddress: parsed.address, ip: req.ip });
     res.json(req.session.user);
-  } catch {
-    res.status(400).json({ error: 'Invalid input' });
+  } catch (err) {
+    await logSecurityEvent('failed_login', { ip: req.ip, reason: (err as Error).message });
+    const msg = err instanceof Web3AuthError ? err.message : 'Invalid input';
+    res.status(400).json({ error: msg });
   }
 });
 

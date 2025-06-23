@@ -4,6 +4,8 @@ process.env.SESSION_SECRET = 'a-very-long-and-secure-session-secret-key';
 process.env.RATE_LIMIT_MAX = '10';
 process.env.RATE_LIMIT_WINDOW = '1000';
 process.env.DATABASE_URL = 'postgresql://appuser:testpass@localhost/appdb';
+process.env.SIGNIN_DOMAIN = 'localhost:3001';
+process.env.SIGNIN_CHAIN_ID = '1';
 const { app, resetUsers, shutdown } = await import('../index.ts');
 const {
   resetNonces,
@@ -56,10 +58,11 @@ describe('auth flow', () => {
       .post('/api/login/wallet/nonce')
       .send({ walletAddress: wallet.address })
       .expect(200);
-    const signature = await wallet.signMessage(nonceRes.body.nonce);
+    const message = `${process.env.SIGNIN_DOMAIN} wants you to sign in with your Ethereum account:\n${wallet.address}\n\nSign in to BlockchainNews\n\nURI: http://${process.env.SIGNIN_DOMAIN}\nVersion: 1\nChain ID: 1\nNonce: ${nonceRes.body.nonce}\nIssued At: ${new Date().toISOString()}`;
+    const signature = await wallet.signMessage(message);
     await agent
       .post('/api/login/wallet')
-      .send({ walletAddress: wallet.address, signature })
+      .send({ message, signature })
       .expect(200);
     const token = await agent.get('/api/token').expect(200);
     expect(token.body.user.walletAddress).toBe(wallet.address);
@@ -73,20 +76,21 @@ describe('auth flow', () => {
       .post('/api/login/wallet/nonce')
       .send({ walletAddress: wallet.address })
       .expect(200);
+    const msg = `${process.env.SIGNIN_DOMAIN} wants you to sign in with your Ethereum account:\n${wallet.address}\n\nSign in to BlockchainNews\n\nURI: http://${process.env.SIGNIN_DOMAIN}\nVersion: 1\nChain ID: 1\nNonce: ${nonceRes.body.nonce}\nIssued At: ${new Date().toISOString()}`;
     const badWallet = Wallet.createRandom();
-    const badSig = await badWallet.signMessage(nonceRes.body.nonce);
+    const badSig = await badWallet.signMessage(msg);
     await agent
       .post('/api/login/wallet')
-      .send({ walletAddress: wallet.address, signature: badSig })
+      .send({ message: msg, signature: badSig })
       .expect(401);
-    const sig = await wallet.signMessage(nonceRes.body.nonce);
+    const sig = await wallet.signMessage(msg);
     await agent
       .post('/api/login/wallet')
-      .send({ walletAddress: wallet.address, signature: sig })
+      .send({ message: msg, signature: sig })
       .expect(200);
     await agent
       .post('/api/login/wallet')
-      .send({ walletAddress: wallet.address, signature: sig })
+      .send({ message: msg, signature: sig })
       .expect(400);
   });
 
@@ -100,10 +104,11 @@ describe('auth flow', () => {
       .expect(200);
     const entry = _nonceStore.get(wallet.address.toLowerCase());
     if (entry) entry.expiresAt = Date.now() - 1;
-    const signature = await wallet.signMessage(nonceRes.body.nonce);
+    const msg = `${process.env.SIGNIN_DOMAIN} wants you to sign in with your Ethereum account:\n${wallet.address}\n\nSign in to BlockchainNews\n\nURI: http://${process.env.SIGNIN_DOMAIN}\nVersion: 1\nChain ID: 1\nNonce: ${nonceRes.body.nonce}\nIssued At: ${new Date().toISOString()}`;
+    const signature = await wallet.signMessage(msg);
     await agent
       .post('/api/login/wallet')
-      .send({ walletAddress: wallet.address, signature })
+      .send({ message: msg, signature })
       .expect(400);
   });
 
@@ -131,10 +136,11 @@ describe('auth flow', () => {
       .post('/api/login/wallet/nonce')
       .send({ walletAddress: wallet.address.toLowerCase() })
       .expect(200);
-    const sig = await wallet.signMessage(nonceRes.body.nonce);
+    const msg = `${process.env.SIGNIN_DOMAIN} wants you to sign in with your Ethereum account:\n${wallet.address.toLowerCase()}\n\nSign in to BlockchainNews\n\nURI: http://${process.env.SIGNIN_DOMAIN}\nVersion: 1\nChain ID: 1\nNonce: ${nonceRes.body.nonce}\nIssued At: ${new Date().toISOString()}`;
+    const sig = await wallet.signMessage(msg);
     const res = await agent
       .post('/api/login/wallet')
-      .send({ walletAddress: wallet.address.toLowerCase(), signature: sig })
+      .send({ message: msg, signature: sig })
       .expect(200);
     expect(res.body.walletAddress).toBe(wallet.address);
   });
