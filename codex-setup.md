@@ -29,13 +29,16 @@ pnpm install
 
 # Create environment file
 cp .env.example .env
+
+# Generate a secure session secret
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
 #### Environment Variables (.env)
 ```bash
 NODE_ENV=development
 PORT=3001
-SESSION_SECRET=codex-development-secret-minimum-32-chars
+SESSION_SECRET=<use generated session secret>
 DATABASE_URL=postgresql://codex:password@localhost:5432/blockchain_news_dev
 RATE_LIMIT_WINDOW=900000
 RATE_LIMIT_MAX=100
