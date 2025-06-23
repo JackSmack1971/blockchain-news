@@ -1,823 +1,1273 @@
-# Server-Side Security Implementation Guidelines
+# Backend Security & API Development Guide
+**server/ - Express.js + TypeScript + PostgreSQL**
 
-## Backend Architecture Overview
+## 🎯 Purpose & Critical Security Context
 
-The `server/` directory contains the Express.js backend with comprehensive security implementations including authentication, session management, database operations, and API security.
+The backend handles authentication, data persistence, API endpoints, and security enforcement for the BlockchainNews platform. Given our **HIGH RISK audit status** with 3 CRITICAL vulnerabilities, all backend development must prioritize security remediation and prevention.
 
-### Key Files and Their Security Roles
-- **`index.ts`**: Main application with security middleware, auth endpoints
-- **`db.ts`**: PostgreSQL connection management and database security
-- **`middleware/`**: Security headers, rate limiting, validation middleware
-- **`routes/`**: API endpoints with authentication and authorization
-- **`utils/`**: Cryptographic functions, input validation, security utilities
+---
 
-## Database Security (`db.ts`)
+## 🚨 CRITICAL: Security Vulnerabilities to Fix First
 
-### Connection Management
+### **SEC-2025-001: Weak Session Secret (CRITICAL)**
 ```typescript
-// Secure connection pooling configuration
-import { Pool } from 'pg';
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-});
-```
-
-### Critical Security Patterns
-- **Parameterized Queries**: Always use `$1, $2` parameters, never string concatenation
-- **Connection Cleanup**: Proper connection release in try/catch/finally blocks
-- **Error Handling**: Never expose internal database errors to clients
-- **Transaction Management**: Use transactions for multi-step operations
-
-### Database Test Patterns
-```typescript
-// Proper test database isolation
-import { beforeEach } from 'vitest';
-
-beforeEach(async () => {
-  await resetUsers();    // Clear user table
-  resetNonces();         // Clear nonce cache
-  resetLoginAttempts();  // Clear rate limit data
-  _authLimiter.resetKey('::ffff:127.0.0.1');
-  _authLimiter.resetKey('127.0.0.1');
-});
-```
-
-### Common Database Issues and Solutions
-- **Constraint Violations**: Ensure proper cleanup between tests
-- **Connection Leaks**: Always release connections in finally blocks
-- **Type Conflicts**: Drop and recreate types properly in test setup
-- **Deadlocks**: Use consistent ordering for multi-table operations
-
-## Authentication Security
-
-### Web3 Wallet Authentication Flow
-```typescript
-// Secure nonce-based signature verification
-interface WalletLoginRequest {
-  walletAddress: string;
-  signature: string;
-  nonce: string;
-}
-
-// Critical validation steps:
-1. Validate wallet address format (checksum)
-2. Verify nonce exists and is recent
-3. Cryptographically verify signature
-4. Clear nonce after use (prevent replay)
-5. Create secure session
-```
-
-### Email/Password Authentication
-```typescript
-import bcrypt from 'bcrypt';
-
-// Constant-time operations to prevent timing attacks
-const isValidLogin = await bcrypt.compare(password, hashedPassword);
-const userExists = await findUserByEmail(email);
-
-// Always take same amount of time regardless of user existence
-if (!userExists || !isValidLogin) {
-  // Simulate work to maintain constant timing
-  await bcrypt.hash('dummy', 10);
-  return res.status(401).json({ error: 'Invalid credentials' });
-}
-```
-
-### Session Management Security
-```typescript
-import session from 'express-session';
-
-// Secure session configuration
-app.use(session({
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: 'strict'
-  }
-}));
-
-// Session property whitelist (prevent prototype pollution)
-const ALLOWED_PROFILE_UPDATES = ['username', 'email', 'preferences'];
-```
-
-## Security Headers and Middleware
-
-### Comprehensive Security Headers
-```typescript
-import express from 'express';
-
-// Required security headers configuration
-app.use((req, res, next) => {
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-XSS-Protection', '1; mode=block');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';");
-  next();
-});
-```
-
-### Rate Limiting Configuration
-```typescript
-import rateLimit from 'express-rate-limit';
-
-// Authentication endpoint rate limiting
-const authLimiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW) || 15 * 60 * 1000,
-  max: parseInt(process.env.RATE_LIMIT_MAX) || 5,
-  message: 'Too many authentication attempts',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-```
-
-## Input Validation and Sanitization
-
-### Wallet Address Validation
-```typescript
-import { ethers } from 'ethers';
-
-// Ethereum address validation with checksum
-function isValidEthereumAddress(address: string): boolean {
-  if (!/^0x[a-fA-F0-9]{40}$/.test(address)) return false;
-  
-  try {
-    // Implement EIP-55 checksum validation
-    const checksumAddress = ethers.getAddress(address);
-    return address === checksumAddress;
-  } catch {
-    return false;
-  }
-}
-```
-
-### API Request Validation
-```typescript
-import { body, validationResult } from 'express-validator';
-
-// Comprehensive input validation middleware
-const validateWalletLogin = [
-  body('walletAddress')
-    .isString()
-    .custom(isValidEthereumAddress)
-    .withMessage('Invalid wallet address'),
-  body('signature')
-    .isString()
-    .isLength({ min: 132, max: 132 })
-    .withMessage('Invalid signature format'),
-  body('nonce')
-    .isString()
-    .isLength({ min: 32, max: 64 })
-    .withMessage('Invalid nonce'),
-];
-```
-
-## Error Handling and Logging
-
-### Security Error Classes
-```typescript
-class DatabaseError extends Error {
-  constructor(message: string, cause?: unknown) {
-    super(message);
-    this.name = 'DatabaseError';
-    this.cause = cause;
-  }
-}
-
-class ValidationError extends Error {
-  constructor(message: string, public field?: string) {
-    super(message);
-    this.name = 'ValidationError';
-    this.field = field;
-  }
-}
-```
-
-### Security Logging Patterns
-```typescript
-import { Request } from 'express';
-
-// Security event logging
-function logSecurityEvent(event: string, details: any, req: Request) {
-  const logEntry = {
-    timestamp: new Date().toISOString(),
-    event,
-    ip: req.ip,
-    userAgent: req.get('User-Agent'),
-    details,
-  };
-  
-  // Log to security log file
-  securityLogger.info(logEntry);
-  
-  // Alert on critical events
-  if (['failed_login', 'rate_limit_exceeded'].includes(event)) {
-    alertingService.notify(logEntry);
-  }
-}
-```
-
-## API Endpoint Security Patterns
-
-### Secure Route Implementation
-```typescript
-import express from 'express';
-
-// Protected route pattern
-app.post('/api/protected', 
-  authLimiter,                    // Rate limiting
-  requireAuthentication,          // Auth middleware
-  validateInput,                  // Input validation
-  async (req, res) => {
-    try {
-      // Secure implementation
-      const result = await secureOperation(req.body);
-      res.json({ success: true, data: result });
-    } catch (error) {
-      logSecurityEvent('operation_failed', { error: error.message }, req);
-      res.status(500).json({ error: 'Operation failed' });
+// server/config.ts - IMPLEMENT IMMEDIATELY
+export const config = {
+  SESSION_SECRET: (() => {
+    const secret = process.env.SESSION_SECRET
+    if (!secret || secret.length < 32) {
+      throw new Error('SESSION_SECRET must be at least 32 characters of cryptographic randomness')
     }
-  }
-);
+    return secret
+  })(),
+  // ... other config
+}
+
+// Generate secure secret for production:
+// node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-### CORS Configuration
+### **SEC-2025-002: Web3 Signature Validation (CRITICAL)**
 ```typescript
-import cors from 'cors';
+// server/routes/auth.ts - IMPLEMENT EIP-4361 STANDARD
+import { ethers } from 'ethers'
 
-// Secure CORS for Web3 integration
+interface SignInMessage {
+  domain: string
+  address: string
+  statement: string
+  uri: string
+  version: string
+  chainId: number
+  nonce: string
+  issuedAt: string
+}
+
+// Store used nonces to prevent replay attacks
+const usedNonces = new Set<string>()
+
+function parseSignInMessage(message: string): SignInMessage | null {
+  try {
+    const lines = message.split('\n')
+    
+    // Validate EIP-4361 format
+    const domain = lines[0].replace(' wants you to sign in with your Ethereum account:', '')
+    const address = lines[1]
+    const statement = lines[3]
+    
+    // Extract structured fields
+    const uri = lines.find(l => l.startsWith('URI: '))?.replace('URI: ', '')
+    const version = lines.find(l => l.startsWith('Version: '))?.replace('Version: ', '')
+    const chainId = parseInt(lines.find(l => l.startsWith('Chain ID: '))?.replace('Chain ID: ', '') || '0')
+    const nonce = lines.find(l => l.startsWith('Nonce: '))?.replace('Nonce: ', '')
+    const issuedAt = lines.find(l => l.startsWith('Issued At: '))?.replace('Issued At: ', '')
+    
+    if (!uri || !version || !chainId || !nonce || !issuedAt) {
+      return null
+    }
+    
+    return { domain, address, statement, uri, version, chainId, nonce, issuedAt }
+  } catch {
+    return null
+  }
+}
+
+authRouter.post('/login/wallet', async (req, res) => {
+  try {
+    const { message, signature } = req.body
+    
+    // Validate message format
+    const parsedMessage = parseSignInMessage(message)
+    if (!parsedMessage) {
+      return res.status(400).json({ error: 'Invalid message format' })
+    }
+    
+    // Validate domain and URI
+    if (parsedMessage.domain !== req.get('host')) {
+      return res.status(400).json({ error: 'Invalid domain' })
+    }
+    
+    // Check nonce hasn't been used (prevent replay)
+    if (usedNonces.has(parsedMessage.nonce)) {
+      return res.status(400).json({ error: 'Nonce already used' })
+    }
+    
+    // Validate timestamp (5 minute window)
+    const issueTime = new Date(parsedMessage.issuedAt).getTime()
+    const now = Date.now()
+    if (Math.abs(now - issueTime) > 5 * 60 * 1000) {
+      return res.status(400).json({ error: 'Message expired' })
+    }
+    
+    // Verify signature
+    const recoveredAddress = ethers.utils.verifyMessage(message, signature)
+    if (recoveredAddress.toLowerCase() !== parsedMessage.address.toLowerCase()) {
+      return res.status(400).json({ error: 'Invalid signature' })
+    }
+    
+    // Mark nonce as used
+    usedNonces.add(parsedMessage.nonce)
+    
+    // Continue with user authentication...
+    const user = await findOrCreateWalletUser(recoveredAddress)
+    // ... rest of auth logic
+    
+  } catch (error) {
+    logger.error('Wallet auth error:', error)
+    res.status(500).json({ error: 'Authentication failed' })
+  }
+})
+```
+
+### **SEC-2025-003: XSS Protection Enhancement (CRITICAL)**
+```typescript
+// server/middleware/security.ts - REPLACE REGEX SANITIZATION
+import DOMPurify from 'isomorphic-dompurify'
+import { z } from 'zod'
+
+// Remove the basic regex sanitization
+// const sanitizeInput = (input: unknown): string => { 
+//   return input.replace(/[<>]/g, '').trim(); 
+// }
+
+// IMPLEMENT: Comprehensive input validation
+export const sanitizeAndValidate = <T>(
+  input: unknown,
+  schema: z.ZodSchema<T>
+): T => {
+  // First sanitize if it's a string
+  if (typeof input === 'string') {
+    input = DOMPurify.sanitize(input, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] })
+  }
+  
+  // Then validate with Zod
+  return schema.parse(input)
+}
+
+// Use for all user inputs
+export const inputSchemas = {
+  email: z.string().email().max(254).transform(s => s.trim().toLowerCase()),
+  password: z.string().min(8).max(128),
+  searchQuery: z.string().max(100).transform(s => s.trim()),
+  articleTitle: z.string().max(200).transform(s => s.trim()),
+  comment: z.string().max(1000).transform(s => s.trim())
+}
+```
+
+---
+
+## 🛡️ Security-First Architecture
+
+### Express.js Security Middleware Stack
+```typescript
+// server/index.ts - REQUIRED SECURITY MIDDLEWARE
+import helmet from 'helmet'
+import cors from 'cors'
+import rateLimit from 'express-rate-limit'
+import csrf from 'csurf'
+import session from 'express-session'
+import pgSession from 'connect-pg-simple'
+
+const app = express()
+
+// 1. Helmet for security headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      imgSrc: ["'self'", "data:", "https:", "blob:"],
+      connectSrc: ["'self'", "wss:", "https:"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"]
+    }
+  },
+  crossOriginEmbedderPolicy: false,
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  }
+}))
+
+// 2. CORS with strict configuration
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-}));
-```
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Requested-With'],
+  optionsSuccessStatus: 200
+}))
 
-## Testing Security Implementation
+// 3. Rate limiting
+const limiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW || '900000'), // 15 minutes
+  max: parseInt(process.env.RATE_LIMIT_MAX || '100'),
+  message: { error: 'Too many requests from this IP' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    logger.warn(`Rate limit exceeded for IP: ${req.ip}`)
+    res.status(429).json({ error: 'Too many requests' })
+  }
+})
+app.use('/api', limiter)
 
-### Security Test Structure
-```typescript
-import { describe, it, beforeEach, expect } from 'vitest';
-import request from 'supertest';
+// 4. Session configuration with PostgreSQL store
+const PgSession = pgSession(session)
+app.use(session({
+  store: new PgSession({
+    pool: pgPool,
+    tableName: 'session'
+  }),
+  secret: config.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  name: 'sessionId', // Don't use default 'connect.sid'
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: parseInt(process.env.COOKIE_MAX_AGE || '86400000'), // 24 hours
+    sameSite: 'strict'
+  }
+}))
 
-describe('Security Tests', () => {
-  beforeEach(async () => {
-    // Reset all security state
-    await resetUsers();
-    resetNonces();
-    resetLoginAttempts();
-    _authLimiter.resetKey('::ffff:127.0.0.1');
-  });
+// 5. CSRF protection (skip for testing)
+if (process.env.NODE_ENV !== 'test') {
+  const csrfProtection = csrf({
+    cookie: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict'
+    }
+  })
+  app.use(csrfProtection)
+  
+  // CSRF token endpoint
+  app.get('/api/csrf', (req, res) => {
+    res.json({ csrfToken: req.csrfToken() })
+  })
+}
 
-  it('rejects malicious input', async () => {
-    const maliciousPayload = {
-      username: '<script>alert("xss")</script>',
-      __proto__: { isAdmin: true }
-    };
-    
-    const res = await request(app)
-      .post('/api/profile')
-      .send(maliciousPayload);
-      
-    expect(res.status).toBe(400);
-    expect(res.body.error).toContain('Invalid input');
-  });
-});
-```
+// 6. Body parsing with size limits
+app.use(express.json({ limit: '10mb' }))
+app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
-## Performance and Security Monitoring
-
-### Metrics Collection
-```typescript
-// Security metrics tracking
-const securityMetrics = {
-  authAttempts: 0,
-  rateLimitHits: 0,
-  validationErrors: 0,
-  sessionCreations: 0,
-};
-
-// Middleware to track metrics
+// 7. Request logging with security events
 app.use((req, res, next) => {
-  const startTime = Date.now();
-  
-  res.on('finish', () => {
-    const duration = Date.now() - startTime;
-    metricsCollector.record({
-      method: req.method,
-      path: req.path,
-      status: res.statusCode,
-      duration,
-    });
-  });
-  
-  next();
-});
+  logger.info(`${req.method} ${req.path}`, {
+    ip: req.ip,
+    userAgent: req.get('User-Agent'),
+    timestamp: new Date().toISOString()
+  })
+  next()
+})
 ```
 
-## Deployment Security Checklist
-
-### Production Security Configuration
-- [ ] `SESSION_SECRET` is cryptographically secure (32+ characters)
-- [ ] Database connections use SSL in production
-- [ ] Rate limiting properly configured for production load
-- [ ] Security headers appropriate for production environment
-- [ ] CORS configured for production frontend domain
-- [ ] Error messages don't expose internal details
-- [ ] All environment variables validated on startup
-- [ ] Database migrations tested in staging environment
-
-### Monitoring and Alerting Setup
-- [ ] Security event logging configured
-- [ ] Rate limit violation alerts enabled
-- [ ] Authentication failure monitoring active
-- [ ] Database performance monitoring in place
-- [ ] Error tracking and reporting configured
-
-## Troubleshooting Common Security Issues
-
-### Authentication Problems
-```bash
-# Debug authentication flow
-DEBUG=auth* npm start
-
-# Test specific auth endpoint
-curl -X POST http://localhost:3001/api/login/wallet \
-  -H "Content-Type: application/json" \
-  -d '{"walletAddress":"0x...","signature":"0x...","nonce":"..."}'
-```
-
-### Database Security Issues
-```bash
-# Check database connections
-psql $DATABASE_URL -c "SELECT count(*) FROM pg_stat_activity;"
-
-# Reset test database
-npm run db:reset:test
-```
-
-### Rate Limiting Issues
+### Database Security Configuration
 ```typescript
-// Reset rate limiter for testing
-_authLimiter.resetKey('127.0.0.1');
-_authLimiter.resetKey('::ffff:127.0.0.1');
+// server/database.ts - SECURE POSTGRESQL CONNECTION
+import { Pool } from 'pg'
+import { z } from 'zod'
+
+// Validate database configuration
+const dbConfigSchema = z.object({
+  host: z.string().min(1),
+  port: z.number().min(1).max(65535),
+  database: z.string().min(1),
+  user: z.string().min(1),
+  password: z.string().min(8)
+})
+
+// Parse connection string securely
+function parseConnectionString(connectionString: string) {
+  try {
+    const url = new URL(connectionString)
+    
+    return dbConfigSchema.parse({
+      host: url.hostname,
+      port: parseInt(url.port) || 5432,
+      database: url.pathname.slice(1),
+      user: url.username,
+      password: url.password
+    })
+  } catch (error) {
+    throw new Error('Invalid database connection string')
+  }
+}
+
+// Create secure connection pool
+export const pool = new Pool({
+  ...parseConnectionString(process.env.DATABASE_URL!),
+  ssl: process.env.NODE_ENV === 'production' ? {
+    rejectUnauthorized: false
+  } : false,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+  statement_timeout: 30000,
+  query_timeout: 30000
+})
+
+// Secure query function with parameter validation
+export async function secureQuery<T = any>(
+  text: string,
+  params: any[] = []
+): Promise<T[]> {
+  try {
+    // Validate parameters
+    if (params.some(param => typeof param === 'object' && param !== null)) {
+      throw new Error('Object parameters not allowed in queries')
+    }
+    
+    const result = await pool.query(text, params)
+    return result.rows
+  } catch (error) {
+    logger.error('Database query error:', { 
+      error: error.message,
+      query: text.substring(0, 100) // Log first 100 chars only
+    })
+    throw new Error('Database operation failed')
+  }
+}
+
+// ALWAYS use for database operations
+export async function findUserByEmail(email: string) {
+  return secureQuery(
+    'SELECT id, email, password_hash, created_at FROM users WHERE email = $1',
+    [email]
+  )
+}
+
+export async function createUser(email: string, passwordHash: string) {
+  return secureQuery(
+    'INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email, created_at',
+    [email, passwordHash]
+  )
+}
+```
+
+### Authentication & Authorization
+```typescript
+// server/middleware/auth.ts - SECURE AUTHENTICATION
+import bcrypt from 'bcrypt'
+import jwt from 'jsonwebtoken'
+import { z } from 'zod'
+
+// JWT configuration
+const JWT_SECRET = process.env.JWT_SECRET || (() => {
+  throw new Error('JWT_SECRET environment variable required')
+})()
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h'
+
+// Password hashing with secure cost factor
+const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || '12')
+
+export async function hashPassword(password: string): Promise<string> {
+  try {
+    return await bcrypt.hash(password, BCRYPT_ROUNDS)
+  } catch (error) {
+    throw new Error('Password hashing failed')
+  }
+}
+
+export async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  try {
+    return await bcrypt.compare(password, hash)
+  } catch (error) {
+    return false
+  }
+}
+
+// JWT token generation with security claims
+export function generateToken(userId: string, email: string): string {
+  const payload = {
+    sub: userId,
+    email,
+    iat: Math.floor(Date.now() / 1000),
+    aud: 'blockchain-news',
+    iss: 'blockchain-news-api'
+  }
+  
+  return jwt.sign(payload, JWT_SECRET, {
+    expiresIn: JWT_EXPIRES_IN,
+    algorithm: 'HS256'
+  })
+}
+
+// JWT verification middleware
+export function verifyToken(req: Request, res: Response, next: NextFunction) {
+  try {
+    const authHeader = req.headers.authorization
+    if (!authHeader?.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authorization token required' })
+    }
+    
+    const token = authHeader.substring(7)
+    const decoded = jwt.verify(token, JWT_SECRET, {
+      algorithms: ['HS256'],
+      audience: 'blockchain-news',
+      issuer: 'blockchain-news-api'
+    }) as any
+    
+    // Attach user info to request
+    req.user = {
+      id: decoded.sub,
+      email: decoded.email
+    }
+    
+    next()
+  } catch (error) {
+    logger.warn('Token verification failed:', { 
+      error: error.message,
+      ip: req.ip 
+    })
+    res.status(401).json({ error: 'Invalid token' })
+  }
+}
+
+// Role-based authorization
+export function requireRole(role: string) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = await secureQuery(
+        'SELECT role FROM users WHERE id = $1',
+        [req.user.id]
+      )
+      
+      if (!user[0] || user[0].role !== role) {
+        return res.status(403).json({ error: 'Insufficient permissions' })
+      }
+      
+      next()
+    } catch (error) {
+      res.status(500).json({ error: 'Authorization check failed' })
+    }
+  }
+}
 ```
 
 ---
 
-## Security Implementation Priorities
+## 🔐 API Route Security Patterns
 
-1. **CRITICAL**: Authentication and session security
-2. **HIGH**: Input validation and XSS prevention
-3. **MEDIUM**: Rate limiting and monitoring
-4. **LOW**: Performance optimization and logging
-
-Always prioritize security over convenience and follow the principle of least privilege for all access controls.
-```
-
-## server/__tests__/AGENTS.md
-
-```markdown
-# Security Testing Implementation Guidelines
-
-## Testing Architecture Overview
-
-The `server/__tests__/` directory contains comprehensive security tests focusing on authentication, authorization, input validation, and attack prevention. All tests use Vitest with Supertest for HTTP testing.
-
-### Test File Organization
-- **`securityAdditional.test.ts`**: Core security functionality tests
-- **`securityHeaders.test.ts`**: Security header validation tests
-- **`auth.test.ts`**: Authentication flow testing
-- **`profile.test.ts`**: User profile and session security
-- **Database-related tests**: Connection and transaction security
-
-## Critical Test Environment Setup
-
-### Database Test Isolation Pattern
+### Input Validation Middleware
 ```typescript
-import { describe, it, beforeEach, expect } from 'vitest';
-import request from 'supertest';
+// server/middleware/validation.ts - COMPREHENSIVE INPUT VALIDATION
+import { Request, Response, NextFunction } from 'express'
+import { AnyZodObject, z } from 'zod'
 
-// CRITICAL: Proper test isolation setup
-beforeEach(async () => {
-  await resetUsers();           // Clear users table
-  resetNonces();               // Clear nonce cache
-  resetLoginAttempts();        // Clear rate limit data
-  _authLimiter.resetKey('::ffff:127.0.0.1');  // Reset IPv6 rate limits
-  _authLimiter.resetKey('127.0.0.1');         // Reset IPv4 rate limits
-});
-```
-
-### Environment Variables for Testing
-```typescript
-// Required test environment configuration
-process.env.SESSION_SECRET = 'a-very-long-and-secure-session-secret-key';
-process.env.RATE_LIMIT_MAX = '10';
-process.env.RATE_LIMIT_WINDOW = '1000';
-process.env.DATABASE_URL = 'postgresql://appuser:testpass@localhost/appdb';
-```
-
-### Test Module Import Pattern
-```typescript
-// Dynamic import after environment setup
-const { app, resetUsers, resetNonces, resetLoginAttempts, _authLimiter } = await import('../index.ts');
-```
-
-## Security Test Categories
-
-### 1. Authentication Security Tests
-
-#### Web3 Wallet Authentication
-```typescript
-describe('Authentication Security', () => {
-  it('rejects wallet login without signature', async () => {
-    const res = await request(app)
-      .post('/api/login/wallet')
-      .send({ walletAddress: '0x742d35Cc6634C0532925a3b8D2B7D17a33b6C4d0' });
-    
-    expect(res.status).toBe(400);
-    expect(res.body.error).toContain('signature');  // CRITICAL: Must validate signature requirement
-  });
-
-  it('rejects invalid wallet addresses', async () => {
-    const invalidAddresses = [
-      'not-an-address',
-      '0xinvalid',
-      '0x742d35Cc6634C0532925a3b8D2B7D17a33b6C4d',     // Too short
-      '0x742d35Cc6634C0532925a3b8D2B7D17a33b6C4d00',   // Too long
-      '',
-      null,
-    ];
-    
-    for (const addr of invalidAddresses) {
-      const res = await request(app)
-        .post('/api/login/wallet')
-        .send({ walletAddress: addr });
-      expect(res.status).toBe(400);
+// Request validation middleware factory
+export function validateRequest(schema: {
+  body?: AnyZodObject
+  query?: AnyZodObject
+  params?: AnyZodObject
+}) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Validate request body
+      if (schema.body) {
+        req.body = schema.body.parse(req.body)
+      }
+      
+      // Validate query parameters
+      if (schema.query) {
+        req.query = schema.query.parse(req.query)
+      }
+      
+      // Validate route parameters
+      if (schema.params) {
+        req.params = schema.params.parse(req.params)
+      }
+      
+      next()
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          details: error.errors.map(e => ({
+            field: e.path.join('.'),
+            message: e.message
+          }))
+        })
+      }
+      
+      res.status(400).json({ error: 'Invalid request format' })
     }
-  });
-});
+  }
+}
+
+// Common validation schemas
+export const schemas = {
+  email: z.string().email().max(254).transform(s => s.trim().toLowerCase()),
+  password: z.string().min(8).max(128),
+  id: z.string().uuid(),
+  walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  pagination: z.object({
+    page: z.string().transform(s => parseInt(s)).refine(n => n > 0).default('1'),
+    limit: z.string().transform(s => parseInt(s)).refine(n => n > 0 && n <= 100).default('20')
+  })
+}
 ```
 
-#### Timing Attack Prevention
+### Secure Route Examples
 ```typescript
-it('performs constant-time login attempts', async () => {
-  const agent = request.agent(app);
-  
-  // Register legitimate user
-  await agent
-    .post('/api/register')
-    .send({ username: 'tim', email: 'tim@test.com', password: 'Secret1!', confirmPassword: 'Secret1!' })
-    .expect(200);
-  
-  // Test timing consistency
-  const start1 = Date.now();
-  await agent
-    .post('/api/login')
-    .send({ email: 'tim@test.com', password: 'wrong' });
-  const time1 = Date.now() - start1;
-  
-  const start2 = Date.now();
-  await agent
-    .post('/api/login')
-    .send({ email: 'bad@test.com', password: 'password123' });
-  const time2 = Date.now() - start2;
-  
-  // Times should be within 50ms (constant-time validation)
-  expect(Math.abs(time1 - time2)).toBeLessThan(50);
-});
-```
+// server/routes/auth.ts - SECURE AUTHENTICATION ROUTES
+import express from 'express'
+import { validateRequest, schemas } from '../middleware/validation'
+import { hashPassword, verifyPassword, generateToken } from '../middleware/auth'
 
-### 2. Session Security Tests
+const authRouter = express.Router()
 
-#### Session Property Manipulation Prevention
-```typescript
-describe('Session Security', () => {
-  it('prevents session property manipulation', async () => {
-    const agent = request.agent(app);
-    
-    // Register user
-    await agent
-      .post('/api/register')
-      .send({ username: 'sally', email: 'sally@test.com', password: 'Secret1!', confirmPassword: 'Secret1!' })
-      .expect(200);
-    
-    // Attempt malicious profile update
-    await agent
-      .post('/api/profile')
-      .send({ 
-        username: 'newname',
-        id: 'malicious',           // Should be ignored
-        isAdmin: true,             // Should be ignored
-        __proto__: { evil: true }  // Prototype pollution attempt
+// User registration with validation
+authRouter.post('/register', 
+  validateRequest({
+    body: z.object({
+      email: schemas.email,
+      password: schemas.password,
+      confirmPassword: z.string()
+    }).refine(data => data.password === data.confirmPassword, {
+      message: "Passwords don't match"
+    })
+  }),
+  async (req, res) => {
+    try {
+      const { email, password } = req.body
+      
+      // Check if user already exists
+      const existingUser = await secureQuery(
+        'SELECT id FROM users WHERE email = $1',
+        [email]
+      )
+      
+      if (existingUser.length > 0) {
+        return res.status(409).json({ error: 'Email already registered' })
+      }
+      
+      // Hash password and create user
+      const passwordHash = await hashPassword(password)
+      const newUser = await secureQuery(
+        'INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email',
+        [email, passwordHash]
+      )
+      
+      // Generate token
+      const token = generateToken(newUser[0].id, newUser[0].email)
+      
+      // Set secure session
+      req.session.userId = newUser[0].id
+      
+      res.status(201).json({
+        message: 'User created successfully',
+        token,
+        user: { id: newUser[0].id, email: newUser[0].email }
       })
-      .expect(200);
-    
-    // Verify only allowed properties were updated
-    const profile = await agent.get('/api/token').expect(200);
-    expect(profile.body.user.username).toBe('newname');
-    expect(profile.body.user.id).not.toBe('malicious');
-    expect((profile.body.user as any).isAdmin).toBeUndefined();
-  });
-});
-```
-
-### 3. Security Headers Validation
-
-#### Comprehensive Header Testing
-```typescript
-describe('Security Headers', () => {
-  it('includes required security headers', async () => {
-    const res = await request(app).get('/');
-    
-    // Core security headers
-    expect(res.headers['x-frame-options']).toBe('DENY');
-    expect(res.headers['x-content-type-options']).toBe('nosniff');
-    expect(res.headers['x-xss-protection']).toBe('1; mode=block');
-    expect(res.headers['referrer-policy']).toBe('strict-origin-when-cross-origin');
-    
-    // CRITICAL: CSP configuration for React app
-    expect(res.headers['content-security-policy']).toContain("default-src 'self'");
-    
-    // Additional security headers
-    expect(res.headers['x-permitted-cross-domain-policies']).toBe('none');
-    expect(res.headers['cross-origin-embedder-policy']).toBe('require-corp');
-    expect(res.headers['cross-origin-opener-policy']).toBe('same-origin');
-  });
-});
-```
-
-### 4. Input Validation Security Tests
-
-#### Malicious Input Testing
-```typescript
-describe('Input Validation', () => {
-  it('sanitizes XSS attempts', async () => {
-    const agent = request.agent(app);
-    
-    const xssPayloads = [
-      '<script>alert("xss")</script>',
-      'javascript:alert(1)',
-      '<img src=x onerror=alert(1)>',
-      '"><script>alert(document.cookie)</script>'
-    ];
-    
-    for (const payload of xssPayloads) {
-      const res = await agent
-        .post('/api/register')
-        .send({ 
-          username: payload,
-          email: 'test@test.com',
-          password: 'Secret1!',
-          confirmPassword: 'Secret1!'
-        });
       
-      expect(res.status).toBe(400);
-      expect(res.body.error).toContain('Invalid input');
+    } catch (error) {
+      logger.error('Registration error:', error)
+      res.status(500).json({ error: 'Registration failed' })
     }
-  });
-  
-  it('prevents SQL injection attempts', async () => {
-    const sqlPayloads = [
-      "'; DROP TABLE users; --",
-      "' OR '1'='1",
-      "admin'--",
-      "' UNION SELECT * FROM users --"
-    ];
-    
-    for (const payload of sqlPayloads) {
-      const res = await request(app)
-        .post('/api/login')
-        .send({ email: payload, password: 'password' });
+  }
+)
+
+// User login with rate limiting
+authRouter.post('/login',
+  rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // 5 attempts per window
+    message: { error: 'Too many login attempts' }
+  }),
+  validateRequest({
+    body: z.object({
+      email: schemas.email,
+      password: z.string().max(128)
+    })
+  }),
+  async (req, res) => {
+    try {
+      const { email, password } = req.body
       
-      expect(res.status).toBe(400);
+      // Find user
+      const users = await secureQuery(
+        'SELECT id, email, password_hash FROM users WHERE email = $1',
+        [email]
+      )
+      
+      if (users.length === 0) {
+        // Use same timing as password verification to prevent timing attacks
+        await bcrypt.compare(password, '$2b$12$dummy.hash.to.prevent.timing.attacks')
+        return res.status(401).json({ error: 'Invalid credentials' })
+      }
+      
+      const user = users[0]
+      
+      // Verify password
+      const isValidPassword = await verifyPassword(password, user.password_hash)
+      if (!isValidPassword) {
+        return res.status(401).json({ error: 'Invalid credentials' })
+      }
+      
+      // Generate token
+      const token = generateToken(user.id, user.email)
+      
+      // Set secure session
+      req.session.userId = user.id
+      
+      res.json({
+        message: 'Login successful',
+        token,
+        user: { id: user.id, email: user.email }
+      })
+      
+    } catch (error) {
+      logger.error('Login error:', error)
+      res.status(500).json({ error: 'Login failed' })
     }
-  });
-});
+  }
+)
+
+export default authRouter
 ```
-
-## Database Testing Patterns
-
-### Database Error Handling Tests
-```typescript
-describe('Database Security', () => {
-  it('handles database errors securely', async () => {
-    // Test with malformed database operations
-    const res = await request(app)
-      .post('/api/register')
-      .send({ 
-        username: 'test',
-        email: 'invalid-email-format',
-        password: 'weak',
-        confirmPassword: 'different'
-      });
-    
-    expect(res.status).toBe(400);
-    // Should not expose internal database errors
-    expect(res.body.error).not.toContain('pg_');
-    expect(res.body.error).not.toContain('postgres');
-  });
-  
-  it('prevents concurrent user creation', async () => {
-    const userData = {
-      username: 'duplicate',
-      email: 'duplicate@test.com',
-      password: 'Secret1!',
-      confirmPassword: 'Secret1!'
-    };
-    
-    // Attempt concurrent registrations
-    const [res1, res2] = await Promise.all([
-      request(app).post('/api/register').send(userData),
-      request(app).post('/api/register').send(userData)
-    ]);
-    
-    // Only one should succeed
-    const successCount = [res1, res2].filter(res => res.status === 200).length;
-    expect(successCount).toBe(1);
-  });
-});
-```
-
-## Rate Limiting Tests
-
-### Authentication Rate Limiting
-```typescript
-describe('Rate Limiting', () => {
-  it('enforces rate limits on authentication endpoints', async () => {
-    const attempts = [];
-    
-    // Exceed rate limit
-    for (let i = 0; i < 12; i++) {
-      attempts.push(
-        request(app)
-          .post('/api/login')
-          .send({ email: 'test@test.com', password: 'wrong' })
-      );
-    }
-    
-    const responses = await Promise.all(attempts);
-    const rateLimitedResponses = responses.filter(res => res.status === 429);
-    
-    expect(rateLimitedResponses.length).toBeGreaterThan(0);
-  });
-  
-  it('rate limits are per-IP', async () => {
-    // Test with different source IPs (requires proper test setup)
-    const res = await request(app)
-      .post('/api/login')
-      .set('X-Forwarded-For', '192.168.1.100')
-      .send({ email: 'test@test.com', password: 'wrong' });
-    
-    expect(res.status).not.toBe(429); // Should not be rate limited
-  });
-});
-```
-
-## Performance Security Tests
-
-### DoS Prevention Tests
-```typescript
-describe('DoS Prevention', () => {
-  it('limits request payload size', async () => {
-    const largePayload = 'x'.repeat(1024 * 1024); // 1MB string
-    
-    const res = await request(app)
-      .post('/api/register')
-      .send({ 
-        username: largePayload,
-        email: 'test@test.com',
-        password: 'Secret1!',
-        confirmPassword: 'Secret1!'
-      });
-    
-    expect(res.status).toBe(413); // Payload too large
-  });
-  
-  it('handles high concurrent load', async () => {
-    const requests = Array(100).fill(null).map(() =>
-      request(app).get('/api/health')
-    );
-    
-    const responses = await Promise.all(requests);
-    const successCount = responses.filter(res => res.status === 200).length;
-    
-    expect(successCount).toBeGreaterThan(90); // 90% success rate minimum
-  });
-});
-```
-
-## Test Execution and Debugging
-
-### Running Security Tests
-```bash
-# Run all security tests
-pnpm run test:security
-
-# Run specific security test file
-pnpm vitest run server/__tests__/securityAdditional.test.ts
-
-# Run with verbose output
-pnpm vitest run server/__tests__/securityAdditional.test.ts --reporter=verbose
-
-# Run specific test case
-pnpm vitest run -t "rejects wallet login without signature"
-
-# Debug mode with full logs
-DEBUG=* pnpm vitest run server/__tests__/securityAdditional.test.ts
-```
-
-### Test Database Management
-```bash
-# Reset test database
-psql $DATABASE_URL -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
-
-# Check database connections
-psql $DATABASE_URL -c "SELECT count(*) FROM pg_stat_activity WHERE datname = 'appdb';"
-
-# Manual cleanup if tests fail
-psql $DATABASE_URL -c "TRUNCATE users, sessions, nonces RESTART IDENTITY CASCADE;"
-```
-
-## Common Test Issues and Solutions
-
-### Database Connection Issues
-```typescript
-import { afterAll, afterEach } from 'vitest';
-
-// Solution: Proper connection cleanup in tests
-afterAll(async () => {
-  await pool.end(); // Close all database connections
-});
-
-// Solution: Wait for operations to complete
-afterEach(async () => {
-  await new Promise(resolve => setTimeout(resolve, 100));
-});
-```
-
-### Race Condition Prevention
-```typescript
-// Solution: Sequential test execution for database operations
-describe('Database Operations', () => {
-  // Use async/await to ensure proper sequencing
-  it('sequential operation test', async () => {
-    await operation1();
-    await operation2();
-    await operation3();
-  });
-});
-```
-
-### Rate Limiter State Issues
-```typescript
-// Solution: Proper rate limiter reset
-beforeEach(() => {
-  // Reset all possible IP formats
-  _authLimiter.resetKey('127.0.0.1');
-  _authLimiter.resetKey('::1');
-  _authLimiter.resetKey('::ffff:127.0.0.1');
-});
-```
-
-## Test Coverage Requirements
-
-### Security Test Coverage Checklist
-- [ ] Authentication flows (email + Web3)
-- [ ] Authorization and access control
-- [ ] Input validation and sanitization
-- [ ] Session management security
-- [ ] Rate limiting effectiveness
-- [ ] Security headers validation
-- [ ] Database security and isolation
-- [ ] Error handling security
-- [ ] XSS and injection prevention
-- [ ] DoS attack prevention
-
-### Performance Benchmarks
-- Authentication response time: < 200ms
-- Database operations: < 100ms
-- Rate limiting decision: < 10ms
-- Session validation: < 50ms
 
 ---
 
-## Security Testing Best Practices
+## 🧪 Security Testing Requirements
 
-1. **Isolation**: Each test should be completely independent
-2. **Realistic Data**: Use realistic attack vectors and payloads
-3. **Edge Cases**: Test boundary conditions and error scenarios
-4. **Performance**: Include timing and load testing
-5. **Documentation**: Document security assumptions and test rationale
+### Test File Structure
+```
+server/__tests__/
+├── auth.security.test.ts        # Authentication security tests
+├── xss.security.test.ts         # XSS prevention tests
+├── csrf.security.test.ts        # CSRF protection tests
+├── injection.security.test.ts   # SQL injection tests
+├── rate-limit.security.test.ts  # Rate limiting tests
+└── session.security.test.ts     # Session security tests
+```
 
-Remember: Security tests should fail safely and provide clear diagnostic information when issues are detected.
+### Example Security Test Patterns
+```typescript
+// server/__tests__/auth.security.test.ts
+import request from 'supertest'
+import { app } from '../index'
+import { pool } from '../database'
+
+describe('Authentication Security Tests', () => {
+  beforeEach(async () => {
+    // Clean database before each test
+    await pool.query('DELETE FROM users WHERE email LIKE %test%')
+  })
+  
+  describe('Password Security', () => {
+    it('should reject weak passwords', async () => {
+      const response = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: 'test@example.com',
+          password: '123456', // Weak password
+          confirmPassword: '123456'
+        })
+      
+      expect(response.status).toBe(400)
+      expect(response.body.error).toContain('Validation failed')
+    })
+    
+    it('should hash passwords securely', async () => {
+      const response = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: 'test@example.com',
+          password: 'SecurePass123!',
+          confirmPassword: 'SecurePass123!'
+        })
+      
+      expect(response.status).toBe(201)
+      
+      // Verify password is hashed in database
+      const user = await pool.query('SELECT password_hash FROM users WHERE email = $1', ['test@example.com'])
+      expect(user.rows[0].password_hash).not.toBe('SecurePass123!')
+      expect(user.rows[0].password_hash.startsWith('$2b)).toBe(true)
+    })
+  })
+  
+  describe('Session Security', () => {
+    it('should create secure session cookies', async () => {
+      const response = await request(app)
+        .post('/api/auth/login')
+        .send({
+          email: 'existing@example.com',
+          password: 'SecurePass123!'
+        })
+      
+      const cookies = response.headers['set-cookie']
+      const sessionCookie = cookies.find(cookie => cookie.includes('sessionId'))
+      
+      expect(sessionCookie).toContain('HttpOnly')
+      expect(sessionCookie).toContain('SameSite=Strict')
+      if (process.env.NODE_ENV === 'production') {
+        expect(sessionCookie).toContain('Secure')
+      }
+    })
+    
+    it('should prevent session fixation attacks', async () => {
+      // Login with one session
+      const loginResponse = await request(app)
+        .post('/api/auth/login')
+        .send({
+          email: 'test@example.com',
+          password: 'SecurePass123!'
+        })
+      
+      const sessionCookie = loginResponse.headers['set-cookie'][0]
+      
+      // Try to use same session for different user
+      const response = await request(app)
+        .get('/api/user/profile')
+        .set('Cookie', sessionCookie)
+      
+      expect(response.status).toBe(200)
+      expect(response.body.user.email).toBe('test@example.com')
+    })
+  })
+  
+  describe('JWT Security', () => {
+    it('should generate secure JWT tokens', async () => {
+      const response = await request(app)
+        .post('/api/auth/login')
+        .send({
+          email: 'test@example.com',
+          password: 'SecurePass123!'
+        })
+      
+      expect(response.body.token).toBeDefined()
+      
+      // Verify token structure
+      const tokenParts = response.body.token.split('.')
+      expect(tokenParts).toHaveLength(3) // header.payload.signature
+      
+      // Verify token contains required claims
+      const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString())
+      expect(payload.sub).toBeDefined()
+      expect(payload.email).toBe('test@example.com')
+      expect(payload.aud).toBe('blockchain-news')
+      expect(payload.iss).toBe('blockchain-news-api')
+    })
+    
+    it('should reject tampered JWT tokens', async () => {
+      const loginResponse = await request(app)
+        .post('/api/auth/login')
+        .send({
+          email: 'test@example.com',
+          password: 'SecurePass123!'
+        })
+      
+      // Tamper with token
+      const originalToken = loginResponse.body.token
+      const tamperedToken = originalToken.slice(0, -5) + 'XXXXX'
+      
+      const response = await request(app)
+        .get('/api/user/profile')
+        .set('Authorization', `Bearer ${tamperedToken}`)
+      
+      expect(response.status).toBe(401)
+      expect(response.body.error).toBe('Invalid token')
+    })
+  })
+  
+  describe('Web3 Authentication Security', () => {
+    it('should validate EIP-4361 message format', async () => {
+      const invalidMessage = 'Invalid message format'
+      const signature = '0x1234567890abcdef'
+      
+      const response = await request(app)
+        .post('/api/auth/login/wallet')
+        .send({ message: invalidMessage, signature })
+      
+      expect(response.status).toBe(400)
+      expect(response.body.error).toBe('Invalid message format')
+    })
+    
+    it('should prevent replay attacks with nonce validation', async () => {
+      const message = `localhost:3001 wants you to sign in with your Ethereum account:
+0x742d35Cc6643C0532925a3b8D9CE8068c2b04c3B
+
+Sign in to BlockchainNews
+
+URI: http://localhost:3001
+Version: 1
+Chain ID: 1
+Nonce: test-nonce-12345678
+Issued At: ${new Date().toISOString()}`
+      
+      const signature = '0xvalidSignature...'
+      
+      // First request should succeed (mocked)
+      // Second request with same nonce should fail
+      const secondResponse = await request(app)
+        .post('/api/auth/login/wallet')
+        .send({ message, signature })
+      
+      expect(secondResponse.status).toBe(400)
+      expect(secondResponse.body.error).toBe('Nonce already used')
+    })
+  })
+})
+
+// server/__tests__/xss.security.test.ts
+describe('XSS Prevention Tests', () => {
+  describe('Input Sanitization', () => {
+    it('should sanitize script tags in user inputs', async () => {
+      const maliciousInput = '<script>alert("xss")</script>Hello World'
+      
+      const response = await request(app)
+        .post('/api/articles/comment')
+        .set('Authorization', `Bearer ${validToken}`)
+        .send({
+          articleId: 'valid-uuid',
+          content: maliciousInput
+        })
+      
+      expect(response.status).toBe(201)
+      
+      // Verify content is sanitized in database
+      const comment = await pool.query('SELECT content FROM comments WHERE article_id = $1', ['valid-uuid'])
+      expect(comment.rows[0].content).not.toContain('<script>')
+      expect(comment.rows[0].content).toBe('Hello World')
+    })
+    
+    it('should prevent encoded XSS attempts', async () => {
+      const encodedXSS = '&lt;script&gt;alert("xss")&lt;/script&gt;'
+      
+      const response = await request(app)
+        .post('/api/user/profile')
+        .set('Authorization', `Bearer ${validToken}`)
+        .send({
+          bio: encodedXSS
+        })
+      
+      expect(response.status).toBe(200)
+      
+      // Verify content is properly sanitized
+      const user = await pool.query('SELECT bio FROM users WHERE id = $1', [userId])
+      expect(user.rows[0].bio).not.toContain('script')
+    })
+  })
+  
+  describe('Output Encoding', () => {
+    it('should properly encode HTML entities in API responses', async () => {
+      // Create content with special characters
+      await pool.query(
+        'INSERT INTO articles (id, title, content) VALUES ($1, $2, $3)',
+        ['test-id', 'Test & Title', 'Content with <special> characters']
+      )
+      
+      const response = await request(app)
+        .get('/api/articles/test-id')
+      
+      expect(response.status).toBe(200)
+      expect(response.body.title).toBe('Test & Title')
+      expect(response.body.content).toBe('Content with <special> characters')
+    })
+  })
+})
+
+// server/__tests__/csrf.security.test.ts
+describe('CSRF Protection Tests', () => {
+  describe('Token Validation', () => {
+    it('should reject POST requests without CSRF token', async () => {
+      const response = await request(app)
+        .post('/api/user/profile')
+        .set('Authorization', `Bearer ${validToken}`)
+        .send({ bio: 'Updated bio' })
+      
+      expect(response.status).toBe(403)
+      expect(response.body.error).toContain('CSRF')
+    })
+    
+    it('should accept POST requests with valid CSRF token', async () => {
+      // Get CSRF token
+      const csrfResponse = await request(app)
+        .get('/api/csrf')
+        .set('Cookie', sessionCookie)
+      
+      const csrfToken = csrfResponse.body.csrfToken
+      
+      const response = await request(app)
+        .post('/api/user/profile')
+        .set('Authorization', `Bearer ${validToken}`)
+        .set('X-CSRF-Token', csrfToken)
+        .set('Cookie', sessionCookie)
+        .send({ bio: 'Updated bio' })
+      
+      expect(response.status).toBe(200)
+    })
+    
+    it('should reject requests with invalid CSRF token', async () => {
+      const response = await request(app)
+        .post('/api/user/profile')
+        .set('Authorization', `Bearer ${validToken}`)
+        .set('X-CSRF-Token', 'invalid-token')
+        .send({ bio: 'Updated bio' })
+      
+      expect(response.status).toBe(403)
+    })
+  })
+})
+
+// server/__tests__/injection.security.test.ts
+describe('SQL Injection Prevention Tests', () => {
+  describe('Parameterized Queries', () => {
+    it('should prevent SQL injection in search queries', async () => {
+      const maliciousQuery = "'; DROP TABLE users; --"
+      
+      const response = await request(app)
+        .get('/api/articles/search')
+        .query({ q: maliciousQuery })
+      
+      expect(response.status).toBe(200)
+      
+      // Verify users table still exists
+      const result = await pool.query('SELECT COUNT(*) FROM users')
+      expect(result.rows[0].count).toBeDefined()
+    })
+    
+    it('should prevent SQL injection in user input fields', async () => {
+      const maliciousEmail = "admin'; UPDATE users SET role = 'admin' WHERE email = 'attacker@evil.com'; --"
+      
+      const response = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: maliciousEmail,
+          password: 'SecurePass123!',
+          confirmPassword: 'SecurePass123!'
+        })
+      
+      expect(response.status).toBe(400) // Should fail validation
+      
+      // Verify no privilege escalation occurred
+      const users = await pool.query("SELECT role FROM users WHERE email = 'attacker@evil.com'")
+      expect(users.rows).toHaveLength(0)
+    })
+  })
+})
+
+// server/__tests__/rate-limit.security.test.ts
+describe('Rate Limiting Tests', () => {
+  describe('API Rate Limits', () => {
+    it('should enforce rate limits on API endpoints', async () => {
+      const requests = []
+      
+      // Make multiple requests quickly
+      for (let i = 0; i < 101; i++) {
+        requests.push(
+          request(app)
+            .get('/api/articles')
+            .expect(res => res.status === 200 || res.status === 429)
+        )
+      }
+      
+      const responses = await Promise.all(requests)
+      const rateLimitedResponses = responses.filter(res => res.status === 429)
+      
+      expect(rateLimitedResponses.length).toBeGreaterThan(0)
+    })
+    
+    it('should have stricter limits on authentication endpoints', async () => {
+      const requests = []
+      
+      // Make multiple login attempts
+      for (let i = 0; i < 6; i++) {
+        requests.push(
+          request(app)
+            .post('/api/auth/login')
+            .send({
+              email: 'test@example.com',
+              password: 'WrongPassword'
+            })
+        )
+      }
+      
+      const responses = await Promise.all(requests)
+      const lastResponse = responses[responses.length - 1]
+      
+      expect(lastResponse.status).toBe(429)
+      expect(lastResponse.body.error).toContain('Too many login attempts')
+    })
+  })
+})
+```
+
+---
+
+## 🔧 Development Workflow
+
+### Pre-Development Checklist
+1. **Security Review**: Check audit findings for relevant issues
+2. **Input Validation**: Plan Zod schemas for all inputs
+3. **Error Handling**: Design secure error responses
+4. **Testing Strategy**: Plan security test cases
+
+### During Development
+1. **Always use parameterized queries** - Never string concatenation
+2. **Validate all inputs** with Zod schemas
+3. **Handle errors securely** - Don't expose internal details
+4. **Log security events** for monitoring
+
+### Pre-Commit Requirements
+```bash
+# Required before every commit
+pnpm test:security          # All security tests must pass
+pnpm run type-check         # TypeScript validation
+pnpm run lint              # ESLint security rules
+pnpm audit --audit-level moderate  # Dependency security
+```
+
+### Code Review Security Checklist
+- [ ] All database queries use parameterized statements
+- [ ] Input validation with Zod schemas implemented
+- [ ] Error handling doesn't expose sensitive information
+- [ ] Authentication/authorization checks on protected routes
+- [ ] CSRF protection on state-changing operations
+- [ ] Rate limiting on sensitive endpoints
+- [ ] Security headers properly configured
+- [ ] Passwords hashed with bcrypt (cost factor ≥12)
+- [ ] JWT tokens include proper security claims
+- [ ] Web3 signatures validated according to EIP-4361
+
+---
+
+## 📊 Performance & Monitoring
+
+### Security Event Logging
+```typescript
+// server/utils/logger.ts - SECURITY EVENT LOGGING
+import winston from 'winston'
+
+export const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL || 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.errors({ stack: true }),
+    winston.format.json()
+  ),
+  defaultMeta: { service: 'blockchain-news-api' },
+  transports: [
+    new winston.transports.File({ 
+      filename: 'logs/error.log', 
+      level: 'error' 
+    }),
+    new winston.transports.File({ 
+      filename: 'logs/security.log',
+      level: 'warn'
+    }),
+    new winston.transports.File({ 
+      filename: 'logs/combined.log' 
+    })
+  ]
+})
+
+// Security event logging functions
+export const securityLogger = {
+  authFailure: (ip: string, email: string, reason: string) => {
+    logger.warn('Authentication failure', {
+      type: 'AUTH_FAILURE',
+      ip,
+      email: email.substring(0, 3) + '***', // Partial email for privacy
+      reason,
+      timestamp: new Date().toISOString()
+    })
+  },
+  
+  suspiciousActivity: (ip: string, activity: string, details: any) => {
+    logger.warn('Suspicious activity detected', {
+      type: 'SUSPICIOUS_ACTIVITY',
+      ip,
+      activity,
+      details,
+      timestamp: new Date().toISOString()
+    })
+  },
+  
+  rateLimitExceeded: (ip: string, endpoint: string) => {
+    logger.warn('Rate limit exceeded', {
+      type: 'RATE_LIMIT_EXCEEDED',
+      ip,
+      endpoint,
+      timestamp: new Date().toISOString()
+    })
+  }
+}
+```
+
+### Performance Monitoring
+```typescript
+// server/middleware/performance.ts - PERFORMANCE MONITORING
+import { Request, Response, NextFunction } from 'express'
+
+// Track slow queries
+export function trackSlowQueries(threshold: number = 1000) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const start = Date.now()
+    
+    res.on('finish', () => {
+      const duration = Date.now() - start
+      
+      if (duration > threshold) {
+        logger.warn('Slow request detected', {
+          method: req.method,
+          url: req.url,
+          duration,
+          ip: req.ip
+        })
+      }
+    })
+    
+    next()
+  }
+}
+
+// Memory usage monitoring
+export function monitorMemoryUsage() {
+  setInterval(() => {
+    const usage = process.memoryUsage()
+    
+    if (usage.heapUsed > 100 * 1024 * 1024) { // 100MB threshold
+      logger.warn('High memory usage detected', {
+        heapUsed: Math.round(usage.heapUsed / 1024 / 1024) + 'MB',
+        heapTotal: Math.round(usage.heapTotal / 1024 / 1024) + 'MB'
+      })
+    }
+  }, 60000) // Check every minute
+}
+```
+
+---
+
+## 🚀 Production Deployment Security
+
+### Environment Variables Validation
+```typescript
+// server/config.ts - PRODUCTION CONFIGURATION VALIDATION
+import { z } from 'zod'
+
+const configSchema = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'production']),
+  PORT: z.string().transform(s => parseInt(s)).refine(n => n > 0 && n < 65536),
+  DATABASE_URL: z.string().url(),
+  JWT_SECRET: z.string().min(32),
+  SESSION_SECRET: z.string().min(32),
+  FRONTEND_URL: z.string().url(),
+  RATE_LIMIT_WINDOW: z.string().transform(s => parseInt(s)),
+  RATE_LIMIT_MAX: z.string().transform(s => parseInt(s)),
+  LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info')
+})
+
+// Validate configuration on startup
+try {
+  export const config = configSchema.parse(process.env)
+  logger.info('Configuration validated successfully')
+} catch (error) {
+  logger.error('Configuration validation failed:', error)
+  process.exit(1)
+}
+```
+
+### Health Check Endpoint
+```typescript
+// server/routes/health.ts - PRODUCTION HEALTH CHECKS
+import express from 'express'
+import { pool } from '../database'
+
+const healthRouter = express.Router()
+
+healthRouter.get('/health', async (req, res) => {
+  try {
+    // Check database connection
+    await pool.query('SELECT 1')
+    
+    // Check memory usage
+    const memUsage = process.memoryUsage()
+    const memUsageMB = Math.round(memUsage.heapUsed / 1024 / 1024)
+    
+    // Check uptime
+    const uptime = Math.round(process.uptime())
+    
+    res.json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      uptime: `${uptime}s`,
+      memory: `${memUsageMB}MB`,
+      database: 'connected'
+    })
+  } catch (error) {
+    logger.error('Health check failed:', error)
+    res.status(503).json({
+      status: 'unhealthy',
+      error: 'Service unavailable'
+    })
+  }
+})
+
+export default healthRouter
+```
+
+---
+
+## 🆘 Troubleshooting Guide
+
+### Common Security Issues
+```bash
+# CSRF token issues
+# Check if frontend is sending X-CSRF-Token header
+curl -X POST http://localhost:3001/api/user/profile \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-CSRF-Token: $CSRF_TOKEN" \
+  -d '{"bio": "test"}'
+
+# JWT verification failures
+# Verify JWT secret matches between environments
+node -e "console.log(require('jsonwebtoken').verify('$TOKEN', '$SECRET'))"
+
+# Database connection issues
+# Test PostgreSQL connection
+psql $DATABASE_URL -c "SELECT version();"
+
+# Rate limiting problems
+# Check Redis connection (if using Redis for rate limiting)
+redis-cli ping
+```
+
+### Security Monitoring Commands
+```bash
+# Check for suspicious activity in logs
+grep "AUTH_FAILURE" logs/security.log | tail -20
+
+# Monitor rate limit violations
+grep "RATE_LIMIT_EXCEEDED" logs/security.log | tail -20
+
+# Check for XSS attempts in request logs
+grep -i "script\|javascript\|onerror" logs/combined.log
+
+# Monitor database connection pool
+grep "database" logs/combined.log | grep -i "error\|timeout"
+```
+
+---
+
+## 📚 Additional Resources
+
+### Security References
+- [OWASP Top 10](https://owasp.org/www-project-top-ten/)
+- [Node.js Security Checklist](https://nodejs.org/en/docs/guides/security/)
+- [Express.js Security Best Practices](https://expressjs.com/en/advanced/best-practice-security.html)
+- [PostgreSQL Security](https://www.postgresql.org/docs/current/security.html)
+
+### Internal Documentation
+- **Root Guide**: `AGENTS.md` (project overview)
+- **Frontend Security**: `src/lib/AGENTS.md`
+- **Security Tests**: `server/__tests__/AGENTS.md`
+- **Deployment Guide**: `README.md`
+
+Remember: The backend is the last line of defense. Every endpoint, every query, every operation must be secured against the threats identified in our security audit.
