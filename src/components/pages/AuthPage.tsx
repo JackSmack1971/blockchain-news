@@ -79,36 +79,21 @@ const AuthPage: React.FC = () => {
 
   const handleWalletConnect = async () => {
     setIsConnectingWallet(true);
-    
+
     try {
-      // Simulate wallet connection
-      if (typeof window !== 'undefined' && (window as any).ethereum) {
-        // Mock MetaMask connection
-        const accounts = await (window as any).ethereum.request({
-          method: 'eth_requestAccounts'
-        });
-        
-        if (accounts && accounts.length > 0) {
-          const success = await loginWithWallet(accounts[0]);
-          
-          if (success) {
-            toast.success('Successfully connected with wallet!');
-            navigate(from, { replace: true });
-          } else {
-            toast.error('Failed to connect wallet');
-          }
-        }
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      const nonce = Array.from(bytes)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+
+      const success = await loginWithWallet(nonce);
+
+      if (success) {
+        toast.success('Successfully connected with wallet!');
+        navigate(from, { replace: true });
       } else {
-        // Mock wallet connection for demo
-        const mockWalletAddress = '0x742d35Cc6635C0532925a3b8D698f4A3F4c5B2BB';
-        const success = await loginWithWallet(mockWalletAddress);
-        
-        if (success) {
-          toast.success('Successfully connected with wallet!');
-          navigate(from, { replace: true });
-        } else {
-          toast.error('Failed to connect wallet');
-        }
+        toast.error('Failed to connect wallet');
       }
     } catch (error) {
       logError(error, 'walletConnect');
