@@ -271,7 +271,7 @@ app.post('/api/register', authLimiter, async (req, res) => {
     if (exists) {
       return res.status(400).json({ error: 'User exists' });
     }
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, 12);
     const user: User = { id: crypto.randomUUID(), username, email, passwordHash };
     await createUser(user);
     req.session.user = sanitize(user);
@@ -292,7 +292,7 @@ app.post('/api/login', authLimiter, async (req, res) => {
     }
     const user = await findUserByEmail(email);
     const hashToCompare =
-      user?.passwordHash || '$2b$10$dummy.hash.for.timing.consistency.protection.only';
+      user?.passwordHash || '$2a$12$4bFcCTq4crRNjgIHpqjWH.a0O5xtQjKhrFrG32JUfwre7O4ngmFOu';
     const isPasswordValid = await bcrypt.compare(password, hashToCompare);
     if (!user || !user.id || !isPasswordValid) {
       if (++attempt.count >= 5) {
