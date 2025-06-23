@@ -4,15 +4,13 @@ process.env.SESSION_SECRET = 'a-very-long-and-secure-session-secret-key';
 process.env.RATE_LIMIT_MAX = '10';
 process.env.RATE_LIMIT_WINDOW = '1000';
 process.env.DATABASE_URL = 'postgresql://appuser:testpass@localhost/appdb';
+const { app, resetUsers, shutdown } = await import('../index.ts');
 const {
-  app,
-  resetUsers,
   resetNonces,
   resetLoginAttempts,
   _nonceStore,
   _authLimiter,
-  shutdown,
-} = await import('../index.ts');
+} = await import('../auth.ts');
 
 describe('auth flow', () => {
   beforeEach(async () => {

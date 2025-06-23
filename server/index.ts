@@ -1,20 +1,14 @@
 import express from 'express';
 import session from 'express-session';
-import rateLimit, { MemoryStore } from 'express-rate-limit';
-import bcrypt from 'bcryptjs';
-import csurf from 'csurf';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { validateEnvironment } from './config/environment';
-import crypto from 'crypto';
+import csurf from 'csurf';
 import { ethers } from 'ethers';
-import { loginSchema, registerSchema, walletLoginSchema } from '../src/lib/validators';
+import { validateEnvironment } from './config/environment';
 import { logSecurityEvent } from './logging';
+import { authRouter } from './auth';
 import {
   initDb,
-  createUser,
-  findUserByEmail,
-  findUserByWallet,
   resetDatabase,
   closePool,
 } from './db';
@@ -53,38 +47,10 @@ if (!Number.isFinite(RATE_LIMIT_WINDOW_MS) || !Number.isFinite(RATE_LIMIT_MAX)) 
 }
 await initDb();
 
-interface User {
-  id: string;
-  username: string;
-  email: string;
-  passwordHash: string;
-  walletAddress?: string;
-}
-
 export const resetUsers = async (): Promise<void> => {
   await resetDatabase();
 };
 
-interface NonceEntry {
-  nonce: string;
-  expiresAt: number;
-}
-
-const nonceStore = new Map<string, NonceEntry>();
-export const _nonceStore = nonceStore; // test-only export
-export const resetNonces = (): void => {
-  nonceStore.clear();
-};
-
-interface AttemptInfo {
-  count: number;
-  lockUntil: number;
-}
-const loginAttempts = new Map<string, AttemptInfo>();
-export const _loginAttempts = loginAttempts; // test-only export
-export const resetLoginAttempts = (): void => {
-  loginAttempts.clear();
-};
 
 export const shutdown = async (): Promise<void> => {
   await closePool();
@@ -101,18 +67,6 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-const authLimiter = rateLimit({
-  windowMs: RATE_LIMIT_WINDOW_MS,
-  max: RATE_LIMIT_MAX,
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: new MemoryStore(),
-  handler: (req, res) => {
-    logSecurityEvent('rate_limit_exceeded', { ip: req.ip, path: req.originalUrl });
-    res.status(429).json({ error: 'Too many requests' });
-  },
-});
-export const _authLimiter = authLimiter; // test-only export
 
 interface AddressValidation {
   valid: boolean;
@@ -134,24 +88,6 @@ export const validateEthereumAddress = (address: unknown): AddressValidation => 
   }
 };
 
-export const validateWalletAddress: express.RequestHandler = (req, res, next) => {
-  const { walletAddress } = req.body as { walletAddress?: unknown };
-  if (!walletAddress) {
-    return res.status(400).json({ error: 'Wallet address is required' });
-  }
-  const validation = validateEthereumAddress(walletAddress);
-  if (!validation.valid) {
-    return res.status(400).json({ error: validation.error });
-  }
-  req.body.walletAddress = validation.address;
-  next();
-}; 
-
-export const authSecurityHeaders: express.RequestHandler = (req, res, next) => {
-  res.setHeader('Cache-Control', 'no-store');
-  res.setHeader('Pragma', 'no-cache');
-  next();
-};
 
 /**
  * Redirect HTTP traffic to HTTPS when in production.
@@ -223,10 +159,6 @@ app.use(
   }),
 );
 
-app.use(
-  ['/api/register', '/api/login', '/api/login/wallet', '/api/login/wallet/nonce'],
-  authSecurityHeaders,
-);
 
 // Enable CSRF protection except during automated testing
 if (config.NODE_ENV !== 'test') {
@@ -243,140 +175,13 @@ if (config.NODE_ENV !== 'test') {
   });
 }
 
-const sanitize = (user: User) => ({
-  id: user.id,
-  username: user.username,
-  email: user.email,
-  walletAddress: user.walletAddress,
-});
-
-const createWalletUser = (address: string): User => ({
-  id: crypto.randomUUID(),
-  username: `wallet_${address.slice(0, 6)}`,
-  email: '',
-  passwordHash: '',
-  walletAddress: address,
-});
-
+app.use('/api', authRouter);
 
 const requireAuth: express.RequestHandler = (req, res, next) => {
   if (req.session?.user) return next();
   res.status(401).json({ error: 'Unauthorized' });
 };
 
-app.post('/api/register', authLimiter, async (req, res) => {
-  try {
-    const { username, email, password } = registerSchema.parse(req.body);
-    const exists = await findUserByEmail(email);
-    if (exists) {
-      return res.status(400).json({ error: 'User exists' });
-    }
-    const passwordHash = await bcrypt.hash(password, 12);
-    const user: User = { id: crypto.randomUUID(), username, email, passwordHash };
-    await createUser(user);
-    req.session.user = sanitize(user);
-    res.json(sanitize(user));
-  } catch {
-    res.status(400).json({ error: 'Invalid input' });
-  }
-});
-
-app.post('/api/login', authLimiter, async (req, res) => {
-  try {
-    const { email, password } = loginSchema.parse(req.body),
-      attempt = loginAttempts.get(email) || { count: 0, lockUntil: 0 };
-    if (attempt.lockUntil > Date.now()) {
-      await logSecurityEvent('account_locked', { email, ip: req.ip });
-      await new Promise(r => setTimeout(r, Math.random() * 50));
-      return res.status(403).json({ error: 'Account locked' });
-    }
-    const user = await findUserByEmail(email);
-    const hashToCompare =
-      user?.passwordHash || '$2a$12$4bFcCTq4crRNjgIHpqjWH.a0O5xtQjKhrFrG32JUfwre7O4ngmFOu';
-    const isPasswordValid = await bcrypt.compare(password, hashToCompare);
-    if (!user || !user.id || !isPasswordValid) {
-      if (++attempt.count >= 5) {
-        attempt.lockUntil = Date.now() + 15 * 60 * 1000;
-        await logSecurityEvent('account_locked', { email, ip: req.ip });
-      }
-      loginAttempts.set(email, attempt); await new Promise(r => setTimeout(r, Math.random() * 50));
-      await logSecurityEvent('failed_login', { email, ip: req.ip });
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-      loginAttempts.delete(email); req.session.user = sanitize(user);
-      await logSecurityEvent('login_success', { email, ip: req.ip });
-      res.json({ message: 'Login successful', user: sanitize(user) });
-  } catch {
-    res.status(400).json({ error: 'Invalid input' });
-  }
-});
-
-app.post('/api/login/wallet/nonce', authLimiter, validateWalletAddress, (req, res) => {
-  try {
-    const { walletAddress } = req.body as { walletAddress: string };
-    const nonce = crypto.randomBytes(32).toString('hex');
-    nonceStore.set(walletAddress.toLowerCase(), {
-      nonce,
-      expiresAt: Date.now() + 5 * 60 * 1000,
-    });
-    res.json({ nonce });
-  } catch {
-    res.status(400).json({ error: 'Invalid input' });
-  }
-});
-
-app.post('/api/login/wallet', authLimiter, validateWalletAddress, async (req, res) => {
-  try {
-    const { walletAddress } = req.body as { walletAddress: string };
-    const { signature } = req.body as { signature?: string };
-    if (!signature) {
-      return res.status(400).json({ error: 'signature required' });
-    }
-    walletLoginSchema.pick({ signature: true }).parse({ signature });
-    const entry = nonceStore.get(walletAddress.toLowerCase());
-    if (!entry || entry.expiresAt < Date.now()) {
-      await logSecurityEvent('failed_login', { walletAddress, ip: req.ip, reason: 'nonce_expired' });
-      return res.status(400).json({ error: 'Nonce expired' });
-    }
-    const recovered = ethers.verifyMessage(entry.nonce, signature);
-    if (recovered.toLowerCase() !== walletAddress.toLowerCase()) {
-      await logSecurityEvent('failed_login', { walletAddress, ip: req.ip, reason: 'invalid_signature' });
-      return res.status(401).json({ error: 'Invalid signature' });
-    }
-    nonceStore.delete(walletAddress.toLowerCase());
-    let user = await findUserByWallet(walletAddress);
-    if (!user) {
-      user = createWalletUser(walletAddress);
-      await createUser(user);
-    }
-    req.session.user = sanitize(user);
-    await logSecurityEvent('login_success', { walletAddress, ip: req.ip });
-    res.json(sanitize(user));
-  } catch {
-    res.status(400).json({ error: 'Invalid input' });
-  }
-});
-
-app.post('/api/logout', (req, res) => {
-  req.session.destroy(() => {
-    res.json({ success: true });
-  });
-});
-
-app.get('/api/token', (req, res) => {
-  if (req.session.user) return res.json({ user: req.session.user });
-  res.status(401).json({ error: 'No session' });
-});
-
-app.post('/api/token', (req, res) => {
-  const { user } = req.body as { user: User };
-  req.session.user = user;
-  res.status(204).end();
-});
-
-app.delete('/api/token', (req, res) => {
-  req.session.destroy(() => res.status(204).end());
-});
 
 app.get('/api/protected', requireAuth, (req, res) => {
   res.json({ success: true });
