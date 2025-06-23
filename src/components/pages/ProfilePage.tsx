@@ -27,6 +27,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import ArticleCard from '@/components/ui/ArticleCard';
+import { profileUpdateSchema } from '@/lib/validation';
 
 interface SettingsForm {
   notifications: boolean;
@@ -101,15 +102,17 @@ const ProfilePage: React.FC = () => {
     user.bookmarks?.includes(article.id)
   );
 
-  const handleProfileSave = async () => {
-    setIsSaving(true);
-    
-    const success = await updateProfile({
-      username: profileForm.username,
-      email: profileForm.email,
-      bio: profileForm.bio,
-      avatar: profileForm.avatar,
-    });
+const handleProfileSave = async () => {
+  setIsSaving(true);
+
+  const parsed = profileUpdateSchema.safeParse(profileForm);
+  if (!parsed.success) {
+    toast.error(parsed.error.errors[0].message);
+    setIsSaving(false);
+    return;
+  }
+
+  const success = await updateProfile(parsed.data);
     
     if (success) {
       toast.success('Profile updated successfully');

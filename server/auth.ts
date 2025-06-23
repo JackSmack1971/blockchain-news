@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { validateEthereumAddress } from './utils/address';
 import rateLimit, { MemoryStore } from 'express-rate-limit';
-import { loginSchema, registerSchema } from '../src/lib/validators';
+import { loginSchema, registerSchema } from '../src/lib/validation';
 import { z } from 'zod';
 import { verifyEip4361Signature, Web3AuthError } from './utils/web3Auth';
 import { logSecurityEvent } from './logging';
