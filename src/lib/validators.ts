@@ -1,16 +1,7 @@
 import { z } from 'zod';
 import { getAddress } from 'ethers';
+import { sanitizeInput } from './security';
 
-const dangerousPatterns = [
-  /<script/i,
-  /javascript:/i,
-  /onload=/i,
-  /data:/i,
-];
-
-export const containsDangerousContent = (value: string): boolean => {
-  return dangerousPatterns.some(pattern => pattern.test(value));
-};
 
 export const isValidEthereumAddress = (address: string): boolean => {
   if (!address || typeof address !== 'string') return false;
@@ -29,49 +20,65 @@ const USERNAME_REGEX = /^[a-zA-Z0-9_-]{3,20}$/;
 export const loginSchema = z.object({
   email: z
     .string()
-    .email()
-    .refine(val => !containsDangerousContent(val), 'Invalid content'),
+    .transform(val => sanitizeInput(val))
+    .pipe(z.string().email()),
   password: z
     .string()
-    .min(8)
-    .regex(
-      PASSWORD_REGEX,
-      'Password must contain letters, numbers and symbols',
-    )
-    .refine(val => !containsDangerousContent(val), 'Invalid content'),
+    .transform(val => sanitizeInput(val))
+    .pipe(
+      z
+        .string()
+        .min(8)
+        .regex(
+          PASSWORD_REGEX,
+          'Password must contain letters, numbers and symbols',
+        ),
+    ),
 });
 
 export const registerSchema = z
   .object({
     username: z
       .string()
-      .min(3)
-      .max(20)
-      .regex(
-        USERNAME_REGEX,
-        'Username can only contain letters, numbers, underscores and hyphens',
-      )
-      .refine(val => !containsDangerousContent(val), 'Invalid content'),
+      .transform(val => sanitizeInput(val))
+      .pipe(
+        z
+          .string()
+          .min(3)
+          .max(20)
+          .regex(
+            USERNAME_REGEX,
+            'Username can only contain letters, numbers, underscores and hyphens',
+          ),
+      ),
     email: z
       .string()
-      .email()
-      .refine(val => !containsDangerousContent(val), 'Invalid content'),
+      .transform(val => sanitizeInput(val))
+      .pipe(z.string().email()),
     password: z
       .string()
-      .min(8)
-      .regex(
-        PASSWORD_REGEX,
-        'Password must contain letters, numbers and symbols',
-      )
-      .refine(val => !containsDangerousContent(val), 'Invalid content'),
+      .transform(val => sanitizeInput(val))
+      .pipe(
+        z
+          .string()
+          .min(8)
+          .regex(
+            PASSWORD_REGEX,
+            'Password must contain letters, numbers and symbols',
+          ),
+      ),
     confirmPassword: z
       .string()
-      .min(8)
-      .regex(
-        PASSWORD_REGEX,
-        'Password must contain letters, numbers and symbols',
-      )
-      .refine(val => !containsDangerousContent(val), 'Invalid content'),
+      .transform(val => sanitizeInput(val))
+      .pipe(
+        z
+          .string()
+          .min(8)
+          .regex(
+            PASSWORD_REGEX,
+            'Password must contain letters, numbers and symbols',
+          ),
+      ),
   })
   .refine(data => data.password === data.confirmPassword, {
     message: 'Passwords do not match',
@@ -80,6 +87,7 @@ export const registerSchema = z
 
 export const ethereumAddressSchema = z
   .string()
+  .transform(val => sanitizeInput(val))
   .regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum address format')
   .refine(address => {
     try {
@@ -88,18 +96,17 @@ export const ethereumAddressSchema = z
     } catch {
       return false;
     }
-  }, 'Invalid address checksum')
-  .refine(val => !containsDangerousContent(val), 'Invalid content');
+  }, 'Invalid address checksum');
 
 export const walletLoginSchema = z.object({
   walletAddress: ethereumAddressSchema,
   signature: z
     .string()
-    .min(1)
-    .refine(val => !containsDangerousContent(val), 'Invalid content'),
+    .transform(val => sanitizeInput(val))
+    .pipe(z.string().min(1)),
   nonce: z
     .string()
-    .min(1)
-    .refine(val => !containsDangerousContent(val), 'Invalid content')
+    .transform(val => sanitizeInput(val))
+    .pipe(z.string().min(1))
     .optional(),
 });
