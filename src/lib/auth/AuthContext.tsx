@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState } from 'react';
 import { apiFetch } from '../api';
-import SecureTokenManager from './SecureTokenManager';
+import { setToken, clearToken } from '../authToken';
 import Web3AuthManager from './Web3AuthManager';
 import { sanitizeNonce } from './AuthValidator';
 
@@ -32,13 +32,12 @@ const parseJwt = (token: string): any => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const tokenManager = SecureTokenManager.getInstance();
   const web3 = new Web3AuthManager();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(false);
 
   const loginWithToken = (token: string): void => {
-    tokenManager.setTokens(token);
+    setToken(token);
     const payload = parseJwt(token) as { sub?: string };
     setSession({ userId: payload?.sub });
   };
@@ -61,7 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = (): void => {
-    tokenManager.clearTokens();
+    clearToken();
     setSession(null);
   };
 

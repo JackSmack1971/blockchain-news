@@ -1,25 +1,31 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setToken, getToken, clearToken } from '../authToken';
 
-vi.stubGlobal('fetch', vi.fn());
+const createToken = (exp: number): string => {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
+    .toString('base64')
+    .replace(/=/g, '');
+  const payload = Buffer.from(JSON.stringify({ exp }))
+    .toString('base64')
+    .replace(/=/g, '');
+  return `${header}.${payload}.sig`;
+};
 
 describe('authToken', () => {
   beforeEach(() => {
-    vi.resetAllMocks();
+    clearToken();
   });
 
-  it('stores and retrieves token', async () => {
-    (fetch as unknown as vi.Mock).mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(null) });
-    (fetch as unknown as vi.Mock).mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ user: { id: '1' } }) });
-    await setToken({ user: { id: '1' } });
-    const token = await getToken<{ id: string }>();
-    expect((fetch as vi.Mock).mock.calls[0][0]).toBe('/api/token');
-    expect(token?.user.id).toBe('1');
+  it('stores and retrieves token', () => {
+    const token = createToken(Math.floor(Date.now() / 1000) + 60);
+    setToken(token);
+    expect(getToken()).toBe(token);
   });
 
-  it('clears token', async () => {
-    (fetch as unknown as vi.Mock).mockResolvedValue({ ok: true, json: () => Promise.resolve(null) });
-    await clearToken();
-    expect((fetch as vi.Mock).mock.calls[0][0]).toBe('/api/token');
+  it('clears token', () => {
+    const token = createToken(Math.floor(Date.now() / 1000) + 60);
+    setToken(token);
+    clearToken();
+    expect(getToken()).toBeNull();
   });
 });
