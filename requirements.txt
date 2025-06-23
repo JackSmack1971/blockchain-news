@@ -22,4 +22,7 @@ black
 flake8
 uvicorn
 gunicorn
-eth-brownie
+eth-account
+eth-keys
+eth-utils
+hexbytes
