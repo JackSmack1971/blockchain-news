@@ -1,5 +1,5 @@
 // Security tests for authentication, session management, headers, and input validation
-import { describe, it, beforeEach, afterEach, expect } from 'vitest';
+import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest';
 import request from 'supertest';
 import crypto from 'crypto';
 import { expectDefaultSecurityHeaders } from './utils/expectSecurityHeaders';
@@ -27,20 +27,20 @@ describe('Security Tests', () => {
       process.env.SESSION_SECRET = originalSecret;
     });
 
-    it('rejects short SESSION_SECRET values', () => {
+    it('rejects short SESSION_SECRET values', async () => {
       process.env.SESSION_SECRET = 'short';
-      expect(() => {
-        delete require.cache[require.resolve('../config')];
-        require('../config');
-      }).toThrow();
+      await expect(async () => {
+        vi.resetModules();
+        await import('../config');
+      }).rejects.toThrow();
     });
 
-    it('accepts strong SESSION_SECRET values', () => {
+    it('accepts strong SESSION_SECRET values', async () => {
       process.env.SESSION_SECRET = crypto.randomBytes(32).toString('hex');
-      expect(() => {
-        delete require.cache[require.resolve('../config')];
-        require('../config');
-      }).not.toThrow();
+      await expect(async () => {
+        vi.resetModules();
+        await import('../config');
+      }).resolves.not.toThrow();
     });
   });
 
