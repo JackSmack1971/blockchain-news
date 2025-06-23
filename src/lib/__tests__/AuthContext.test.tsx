@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { AuthProvider, useAuth } from '../auth/AuthContext';
+import { AuthProvider, useAuth } from '../../contexts/AuthContext';
 
 vi.mock('../api', () => ({ apiFetch: vi.fn().mockResolvedValue({}) }));
 vi.mock('../auth/Web3AuthManager', () => {
@@ -20,12 +20,15 @@ describe('AuthContext', () => {
     vi.clearAllMocks();
   });
 
-  it('loginWithToken sets session', () => {
-    const token = 'eyJhbGciOiJIUzI1NiJ9.' +
-      btoa(JSON.stringify({ sub: '1', exp: Math.floor(Date.now() / 1000) + 60 }));
+  it('login sets session', async () => {
+    const mockResponse = { token: 't', user: { id: '1', username: 'u', email: 'e' } };
+    const { apiFetch } = await import('../api');
+    (apiFetch as any).mockResolvedValueOnce(mockResponse);
     const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
-    act(() => result.current.loginWithToken(token));
-    expect(result.current.session?.userId).toBe('1');
+    await act(async () => {
+      await result.current.login('e', 'p');
+    });
+    expect(result.current.user?.id).toBe('1');
   });
 
   it('loginWithWallet sets session address', async () => {

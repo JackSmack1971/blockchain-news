@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getToken, setToken, clearToken, apiRequest } from '@/lib/authToken';
 import { logError } from '@/lib/errors';
+import Web3AuthManager from '@/lib/auth/Web3AuthManager';
+import { sanitizeNonce } from '@/lib/auth/AuthValidator';
 
 interface User {
   id: string;
@@ -30,7 +32,7 @@ interface AuthContextType {
   isLoading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<boolean>;
-  loginWithWallet: (walletAddress: string) => Promise<boolean>;
+  loginWithWallet: (nonce: string) => Promise<boolean>;
   register: (userData: { username: string; email: string; password: string }) => Promise<boolean>;
   logout: () => void;
   updateProfile: (updates: Partial<User>) => Promise<boolean>;
@@ -90,14 +92,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const loginWithWallet = async (walletAddress: string): Promise<boolean> => {
+  const web3 = new Web3AuthManager();
+
+  const loginWithWallet = async (nonce: string): Promise<boolean> => {
     setIsLoading(true);
     setError(null);
     try {
+      const cleanNonce = sanitizeNonce(nonce);
+      const { address } = await web3.connectWallet();
+      const signature = await web3.signAuthMessage(cleanNonce, address);
       const data = await apiRequest<{ token: string; user: User }>('/api/login/wallet', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress }),
+        body: JSON.stringify({ address, signature, nonce: cleanNonce }),
       });
       setToken(data.token);
       setUser(data.user);
