@@ -8,6 +8,8 @@ export function expectDefaultSecurityHeaders(res: Response): void {
   expect(h['x-xss-protection']).toBe('1; mode=block');
   expect(h['referrer-policy']).toBe('strict-origin-when-cross-origin');
   expect(h['content-security-policy']).toContain("default-src 'self'");
+  expect(h['content-security-policy']).toMatch(/script-src [^;]*'strict-dynamic'/);
+  expect(h['content-security-policy']).toMatch(/script-src [^;]*nonce-/);
   expect(h['x-permitted-cross-domain-policies']).toBe('none');
   expect(h['cross-origin-embedder-policy']).toBe('require-corp');
   expect(h['cross-origin-opener-policy']).toBe('same-origin');

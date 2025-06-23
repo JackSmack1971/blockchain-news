@@ -6,6 +6,7 @@ import { sanitize } from './utils/sanitize';
 import { config } from './config';
 import { logSecurityEvent } from './logging';
 import { authRouter } from './auth';
+import { securityMiddleware } from './middleware/security';
 import {
   initDb,
   resetDatabase,
@@ -86,35 +87,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Security headers middleware applied early in the pipeline
-// CSP allows blockchain APIs and inlined styles/scripts for Vite in dev mode
-const CSP_HEADER = [
-  "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: https:",
-  "connect-src 'self' https://api.coingecko.com",
-].join('; ');
-
-app.use((req, res, next) => {
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-XSS-Protection', '1; mode=block');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Content-Security-Policy', CSP_HEADER);
-  res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
-  res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
-  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-  res.setHeader(
-    'Strict-Transport-Security',
-    'max-age=63072000; includeSubDomains; preload',
-  );
-  res.setHeader(
-    'Permissions-Policy',
-    'geolocation=(), microphone=(), camera=()',
-  );
-  next();
-});
+// Apply security middleware with per-request CSP nonce
+app.use(securityMiddleware);
 const isProd = config.NODE_ENV === 'production';
 const cookieName = isProd ? '__Secure-sid' : 'sid';
 app.use(
@@ -171,14 +145,14 @@ app.post('/api/profile', requireAuth, (req, res) => {
 
 // Custom 404 handler to ensure consistent security headers
 app.use('*', (req, res) => {
-  res.setHeader('Content-Security-Policy', CSP_HEADER);
+  res.setHeader('Content-Security-Policy', res.locals.cspHeader);
   res.status(404).json({ error: 'Not found' });
 });
 
 // Error handler to prevent Express from overriding security headers
 app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Unhandled error:', err);
-  res.setHeader('Content-Security-Policy', CSP_HEADER);
+  res.setHeader('Content-Security-Policy', res.locals.cspHeader);
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
