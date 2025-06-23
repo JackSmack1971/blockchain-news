@@ -9,3 +9,17 @@ pip>=22.0.0
 # Development utilities
 requests>=2.28.0
 python-dotenv>=1.0.0
+
+django
+flask
+fastapi
+sqlalchemy
+psycopg2-binary
+alembic
+web3
+brownie-eth
+pytest
+black
+flake8
+uvicorn
+gunicorn
