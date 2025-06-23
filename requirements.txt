@@ -17,9 +17,9 @@ sqlalchemy
 psycopg2-binary
 alembic
 web3
-brownie-eth
 pytest
 black
 flake8
 uvicorn
 gunicorn
+eth-brownie
