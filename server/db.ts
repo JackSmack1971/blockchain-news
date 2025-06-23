@@ -56,20 +56,31 @@ export async function closePool(): Promise<void> {
   await pool.end();
 }
 
-export async function backupDatabase(path: string): Promise<void> {
-  const { exec } = await import('node:child_process');
+import { execFile } from 'node:child_process';
+import path from 'path';
+
+function ensureSafeAbsolutePath(filePath: string): string {
+  const normalized = path.normalize(filePath);
+  if (!path.isAbsolute(normalized) || normalized.includes('..')) {
+    throw new DatabaseError('Path must be a safe absolute path');
+  }
+  return normalized;
+}
+
+export async function backupDatabase(filePath: string): Promise<void> {
+  const safePath = ensureSafeAbsolutePath(filePath);
   return new Promise((resolve, reject) => {
-    exec(`pg_dump ${baseConnStr} > ${path}`, err => {
+    execFile('pg_dump', ['--dbname', baseConnStr, '-f', safePath], err => {
       if (err) reject(new DatabaseError('Backup failed', err));
       else resolve();
     });
   });
 }
 
-export async function restoreDatabase(path: string): Promise<void> {
-  const { exec } = await import('node:child_process');
+export async function restoreDatabase(filePath: string): Promise<void> {
+  const safePath = ensureSafeAbsolutePath(filePath);
   return new Promise((resolve, reject) => {
-    exec(`psql ${baseConnStr} < ${path}`, err => {
+    execFile('psql', ['--dbname', baseConnStr, '-f', safePath], err => {
       if (err) reject(new DatabaseError('Restore failed', err));
       else resolve();
     });
