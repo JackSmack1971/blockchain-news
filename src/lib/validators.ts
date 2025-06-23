@@ -74,3 +74,74 @@ export const walletLoginSchema = z.object({
   signature: z.string().min(1),
   nonce: z.string().min(1).optional(),
 });
+
+export interface ValidationRule {
+  required?: boolean;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: RegExp;
+  sanitize?: (value: string) => string;
+}
+
+export interface ValidationResult {
+  isValid: boolean;
+  error?: string;
+  value?: string;
+}
+
+export const validationRules = {
+  username: {
+    required: true,
+    minLength: 3,
+    maxLength: 30,
+    pattern: /^[a-zA-Z0-9_-]+$/,
+    sanitize: (value: string) => value.trim().toLowerCase(),
+  },
+  email: {
+    required: true,
+    pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+    maxLength: 254,
+    sanitize: (value: string) => value.trim().toLowerCase(),
+  },
+  password: {
+    required: true,
+    minLength: 8,
+    maxLength: 128,
+    pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
+  },
+} as const;
+
+export function validateInput(value: string, rules: ValidationRule): ValidationResult {
+  const sanitized = rules.sanitize ? rules.sanitize(value) : value;
+
+  const dangerousPatterns = [
+    /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
+    /javascript:/gi,
+    /on\w+\s*=\s*/gi,
+    /data:text\/html/gi,
+  ];
+
+  for (const pattern of dangerousPatterns) {
+    if (pattern.test(sanitized)) {
+      return { isValid: false, error: 'Invalid characters detected' };
+    }
+  }
+
+  if (rules.required && !sanitized) {
+    return { isValid: false, error: 'This field is required' };
+  }
+
+  if (rules.minLength && sanitized.length < rules.minLength) {
+    return { isValid: false, error: `Minimum length is ${rules.minLength}` };
+  }
+
+  if (rules.maxLength && sanitized.length > rules.maxLength) {
+    return { isValid: false, error: `Maximum length is ${rules.maxLength}` };
+  }
+
+  if (rules.pattern && !rules.pattern.test(sanitized)) {
+    return { isValid: false, error: 'Invalid format' };
+  }
+
+  return { isValid: true, value: sanitized };
+}

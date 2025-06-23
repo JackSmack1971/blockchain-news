@@ -8,7 +8,13 @@ import dotenv from 'dotenv';
 import { validateEnvironment } from './config/environment';
 import crypto from 'crypto';
 import { ethers } from 'ethers';
-import { loginSchema, registerSchema, walletLoginSchema } from '../src/lib/validators';
+import {
+  loginSchema,
+  registerSchema,
+  walletLoginSchema,
+  validationRules,
+  validateInput,
+} from '../src/lib/validators';
 import { logSecurityEvent } from './logging';
 import {
   initDb,
@@ -266,7 +272,32 @@ const requireAuth: express.RequestHandler = (req, res, next) => {
 
 app.post('/api/register', authLimiter, async (req, res) => {
   try {
-    const { username, email, password } = registerSchema.parse(req.body);
+    const usernameCheck = validateInput(req.body.username, validationRules.username);
+    if (!usernameCheck.isValid) {
+      return res.status(400).json({ error: usernameCheck.error });
+    }
+    const emailCheck = validateInput(req.body.email, validationRules.email);
+    if (!emailCheck.isValid) {
+      return res.status(400).json({ error: emailCheck.error });
+    }
+    const passwordCheck = validateInput(req.body.password, validationRules.password);
+    if (!passwordCheck.isValid) {
+      return res.status(400).json({ error: passwordCheck.error });
+    }
+    const confirmCheck = validateInput(
+      req.body.confirmPassword,
+      validationRules.password,
+    );
+    if (!confirmCheck.isValid) {
+      return res.status(400).json({ error: confirmCheck.error });
+    }
+    const { username, email, password, confirmPassword } = {
+      username: usernameCheck.value!,
+      email: emailCheck.value!,
+      password: passwordCheck.value!,
+      confirmPassword: confirmCheck.value!,
+    };
+    registerSchema.parse({ username, email, password, confirmPassword });
     const exists = await findUserByEmail(email);
     if (exists) {
       return res.status(400).json({ error: 'User exists' });
@@ -283,8 +314,20 @@ app.post('/api/register', authLimiter, async (req, res) => {
 
 app.post('/api/login', authLimiter, async (req, res) => {
   try {
-    const { email, password } = loginSchema.parse(req.body),
-      attempt = loginAttempts.get(email) || { count: 0, lockUntil: 0 };
+    const emailCheck = validateInput(req.body.email, validationRules.email);
+    if (!emailCheck.isValid) {
+      return res.status(400).json({ error: emailCheck.error });
+    }
+    const passwordCheck = validateInput(req.body.password, validationRules.password);
+    if (!passwordCheck.isValid) {
+      return res.status(400).json({ error: passwordCheck.error });
+    }
+    const { email, password } = {
+      email: emailCheck.value!,
+      password: passwordCheck.value!,
+    };
+    loginSchema.parse({ email, password });
+    const attempt = loginAttempts.get(email) || { count: 0, lockUntil: 0 };
     if (attempt.lockUntil > Date.now()) {
       await logSecurityEvent('account_locked', { email, ip: req.ip });
       await new Promise(r => setTimeout(r, Math.random() * 50));

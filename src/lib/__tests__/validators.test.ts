@@ -4,6 +4,8 @@ import {
   registerSchema,
   ethereumAddressSchema,
   walletLoginSchema,
+  validateInput,
+  validationRules,
 } from '../validators';
 
 describe('loginSchema', () => {
@@ -105,5 +107,18 @@ describe('walletLoginSchema', () => {
   it('requires walletAddress and signature', () => {
     const result = walletLoginSchema.safeParse({ walletAddress: '0x52908400098527886E0F7030069857D2E4169EE7' });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('validateInput', () => {
+  it('rejects XSS payload', () => {
+    const res = validateInput('<script>alert(1)</script>', validationRules.username);
+    expect(res.isValid).toBe(false);
+  });
+
+  it('sanitizes valid input', () => {
+    const res = validateInput('  Alice  ', validationRules.username);
+    expect(res.isValid).toBe(true);
+    expect(res.value).toBe('alice');
   });
 });
