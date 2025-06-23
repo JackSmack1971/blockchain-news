@@ -1,11 +1,14 @@
 // Security tests for authentication, session management, headers, and input validation
-import { describe, it, beforeEach, expect } from 'vitest';
+import { describe, it, beforeEach, afterEach, expect } from 'vitest';
 import request from 'supertest';
+import crypto from 'crypto';
 import { expectDefaultSecurityHeaders } from './utils/expectSecurityHeaders';
+
 process.env.SESSION_SECRET = 'a-very-long-and-secure-session-secret-key';
 process.env.RATE_LIMIT_MAX = '10';
 process.env.RATE_LIMIT_WINDOW = '1000';
 process.env.DATABASE_URL = 'postgresql://appuser:testpass@localhost/appdb';
+
 const { app, resetUsers, resetNonces, resetLoginAttempts, _authLimiter } = await import('../index.ts');
 
 describe('Security Tests', () => {
@@ -15,6 +18,30 @@ describe('Security Tests', () => {
     resetLoginAttempts();
     _authLimiter.resetKey('::ffff:127.0.0.1');
     _authLimiter.resetKey('127.0.0.1');
+  });
+
+  describe('Configuration Validation', () => {
+    const originalSecret = process.env.SESSION_SECRET;
+
+    afterEach(() => {
+      process.env.SESSION_SECRET = originalSecret;
+    });
+
+    it('rejects short SESSION_SECRET values', () => {
+      process.env.SESSION_SECRET = 'short';
+      expect(() => {
+        delete require.cache[require.resolve('../config')];
+        require('../config');
+      }).toThrow();
+    });
+
+    it('accepts strong SESSION_SECRET values', () => {
+      process.env.SESSION_SECRET = crypto.randomBytes(32).toString('hex');
+      expect(() => {
+        delete require.cache[require.resolve('../config')];
+        require('../config');
+      }).not.toThrow();
+    });
   });
 
   describe('Authentication Security', () => {
