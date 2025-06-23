@@ -3,7 +3,6 @@ import session from 'express-session';
 import cors from 'cors';
 import csurf from 'csurf';
 import { sanitize } from './utils/sanitize';
-import { ethers } from 'ethers';
 import { config } from './config';
 import { logSecurityEvent } from './logging';
 import { authRouter } from './auth';
@@ -12,6 +11,8 @@ import {
   resetDatabase,
   closePool,
 } from './db';
+
+export { validateEthereumAddress } from './utils/address';
 
 /**
  * Parse and validate cookie settings from environment variables.
@@ -54,27 +55,6 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
 app.use(cors(corsOptions));
-
-
-interface AddressValidation {
-  valid: boolean;
-  address?: string;
-  error?: string;
-}
-
-export const validateEthereumAddress = (address: unknown): AddressValidation => {
-  if (!address || typeof address !== 'string') {
-    return { valid: false, error: 'Address must be a string' };
-  }
-  if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
-    return { valid: false, error: 'Invalid Ethereum address format' };
-  }
-  try {
-    return { valid: true, address: ethers.getAddress(address) };
-  } catch {
-    return { valid: false, error: 'Invalid address checksum' };
-  }
-};
 
 
 /**
