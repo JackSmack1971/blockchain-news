@@ -21,6 +21,11 @@ describe('loginSchema', () => {
     const result = loginSchema.safeParse({ email: 'test@example.com', password: 'abcdef' });
     expect(result.success).toBe(false);
   });
+
+  it('rejects script content', () => {
+    const result = loginSchema.safeParse({ email: '<script>alert(1)</script>', password: 'Abcdef1!' });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('registerSchema', () => {
@@ -63,6 +68,16 @@ describe('registerSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('rejects dangerous username', () => {
+    const result = registerSchema.safeParse({
+      username: '<script>alert(1)</script>',
+      email: 'a@b.com',
+      password: 'Abcdef1!',
+      confirmPassword: 'Abcdef1!',
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 it('fails when email missing', () => {
@@ -99,11 +114,25 @@ describe('ethereumAddressSchema', () => {
     );
     expect(result.success).toBe(false);
   });
+
+  it('rejects dangerous content', () => {
+    const result = ethereumAddressSchema.safeParse('javascript:alert(1)');
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('walletLoginSchema', () => {
   it('requires walletAddress and signature', () => {
     const result = walletLoginSchema.safeParse({ walletAddress: '0x52908400098527886E0F7030069857D2E4169EE7' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects dangerous signature', () => {
+    const result = walletLoginSchema.safeParse({
+      walletAddress: '0x52908400098527886E0F7030069857D2E4169EE7',
+      signature: 'javascript:alert(1)',
+      nonce: '123',
+    });
     expect(result.success).toBe(false);
   });
 });
