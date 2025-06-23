@@ -190,4 +190,15 @@ describe('auth flow', () => {
     const durationNon = Date.now() - start2;
     expect(Math.abs(durationExisting - durationNon)).toBeLessThan(200);
   });
+
+  it('stores password hashes with cost factor 12', async () => {
+    const agent = request.agent(app);
+    await agent
+      .post('/api/register')
+      .send({ username: 'hash', email: 'hash@test.com', password: 'Secret1!', confirmPassword: 'Secret1!' })
+      .expect(200);
+    const { findUserByEmail } = await import('../db');
+    const user = await findUserByEmail('hash@test.com');
+    expect(user.password_hash).toMatch(/^\$2[abxy]\$12\$/);
+  });
 });
