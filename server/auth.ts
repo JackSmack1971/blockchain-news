@@ -1,7 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { ethers } from 'ethers';
+import { validateEthereumAddress } from './utils/address';
 import rateLimit, { MemoryStore } from 'express-rate-limit';
 import { loginSchema, registerSchema } from '../src/lib/validators';
 import { z } from 'zod';
@@ -15,21 +15,6 @@ export const authSecurityHeaders: express.RequestHandler = (_req, res, next) => 
   next();
 };
 
-export const validateEthereumAddress = (
-  address: unknown,
-): { valid: boolean; address?: string; error?: string } => {
-  if (!address || typeof address !== 'string') {
-    return { valid: false, error: 'Address must be a string' };
-  }
-  if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
-    return { valid: false, error: 'Invalid Ethereum address format' };
-  }
-  try {
-    return { valid: true, address: ethers.getAddress(address) };
-  } catch {
-    return { valid: false, error: 'Invalid address checksum' };
-  }
-};
 
 export const validateWalletAddress: express.RequestHandler = (req, res, next) => {
   const { walletAddress } = req.body as { walletAddress?: unknown };
