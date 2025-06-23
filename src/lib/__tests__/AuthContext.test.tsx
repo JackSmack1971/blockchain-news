@@ -10,7 +10,10 @@ vi.mock('../auth/Web3AuthManager', () => {
         address: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
         signer: {},
       }),
-      signAuthMessage: vi.fn().mockResolvedValue('0x'.padEnd(132, 'a')),
+      signAuthMessage: vi.fn().mockResolvedValue({
+        message: 'msg',
+        signature: '0x'.padEnd(132, 'a'),
+      }),
     })),
   };
 });
@@ -31,11 +34,14 @@ describe('AuthContext', () => {
     expect(result.current.user?.id).toBe('1');
   });
 
-  it('loginWithWallet sets session address', async () => {
+  it('loginWithWallet signs message and calls API', async () => {
     const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
+    const { apiFetch } = await import('../api');
     await act(async () => {
       await result.current.loginWithWallet('nonce');
     });
-    expect(result.current.session?.address).toMatch(/^0x/);
+    expect((apiFetch as any).mock.calls[0][0]).toBe('/api/login/wallet');
+    const body = JSON.parse((apiFetch as any).mock.calls[0][1].body);
+    expect(body).toEqual({ message: 'msg', signature: '0x'.padEnd(132, 'a') });
   });
 });

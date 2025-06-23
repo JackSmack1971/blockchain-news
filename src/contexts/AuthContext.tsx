@@ -100,11 +100,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const cleanNonce = sanitizeNonce(nonce);
       const { address } = await web3.connectWallet();
-      const signature = await web3.signAuthMessage(cleanNonce, address);
+      const { message, signature } = await web3.signAuthMessage(cleanNonce, address);
       const data = await apiRequest<{ token: string; user: User }>('/api/login/wallet', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, signature, nonce: cleanNonce }),
+        body: JSON.stringify({ message, signature }),
       });
       setToken(data.token);
       setUser(data.user);

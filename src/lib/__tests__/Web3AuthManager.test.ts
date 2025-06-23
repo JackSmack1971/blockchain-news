@@ -26,7 +26,11 @@ describe('Web3AuthManager', () => {
 
   it('signs authentication message', async () => {
     const mgr = new Web3AuthManager(() => new MockProvider() as any);
-    const sig = await mgr.signAuthMessage('nonce', '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045');
-    expect(sig).toMatch(/^0x/);
+    const { message, signature } = await mgr.signAuthMessage(
+      'nonce',
+      '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
+    );
+    expect(signature).toMatch(/^0x/);
+    expect(message).toContain('Nonce: nonce');
   });
 });
