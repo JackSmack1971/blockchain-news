@@ -1,11 +1,10 @@
 import express from 'express';
 import session from 'express-session';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import csurf from 'csurf';
 import { sanitize } from './utils/sanitize';
 import { ethers } from 'ethers';
-import { validateEnvironment } from './config/environment';
+import { config } from './config';
 import { logSecurityEvent } from './logging';
 import { authRouter } from './auth';
 import {
@@ -13,15 +12,6 @@ import {
   resetDatabase,
   closePool,
 } from './db';
-
-dotenv.config();
-
-const envResult = validateEnvironment();
-if (!envResult.success) {
-  console.error(envResult.error);
-  process.exit(1);
-}
-const config = envResult.data;
 
 /**
  * Parse and validate cookie settings from environment variables.
@@ -40,9 +30,6 @@ const cookieOptions = parseCookieOptions();
 
 const RATE_LIMIT_WINDOW_MS = config.RATE_LIMIT_WINDOW;
 const RATE_LIMIT_MAX = config.RATE_LIMIT_MAX;
-if (!config.SESSION_SECRET) {
-  throw new Error('SESSION_SECRET is required');
-}
 if (!Number.isFinite(RATE_LIMIT_WINDOW_MS) || !Number.isFinite(RATE_LIMIT_MAX)) {
   throw new Error('Invalid rate limit configuration');
 }
