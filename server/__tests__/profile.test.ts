@@ -60,9 +60,14 @@ describe('profile update', () => {
       .expect(200);
     await agent
       .post('/api/profile')
-      .send({ username: '<script>alert(1)</script>evy' })
+      .send({
+        username: '<img src=x onerror="alert(1)"><script>alert(1)</script>evy',
+        avatar: 'javascript:alert(1)',
+      })
       .expect(200);
     const after = await agent.get('/api/token').expect(200);
     expect(after.body.user.username).not.toMatch(/<script/i);
+    expect(after.body.user.username).not.toMatch(/onerror/i);
+    expect(after.body.user.avatar).not.toMatch(/javascript:/i);
   });
 });
