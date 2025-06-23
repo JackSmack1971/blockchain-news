@@ -1,20 +1,5 @@
 import { apiFetch } from './api';
-
-export interface TokenPayload<T = unknown> {
-  user: T;
-}
-
-const TOKEN_ENDPOINT = '/api/token';
-const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN;
-const COOKIE_MAX_AGE = Number(process.env.COOKIE_MAX_AGE || 604800000); // 7 days
-const COOKIE_SECURE = process.env.NODE_ENV === 'production';
-
-interface CookieOptions {
-  domain?: string;
-  maxAge?: number;
-  secure?: boolean;
-  httpOnly?: boolean;
-}
+import SecureTokenManager from './auth/SecureTokenManager';
 
 class TokenError extends Error {
   constructor(message: string) {
@@ -43,37 +28,22 @@ export const apiRequest = async <T>(
 };
 
 /**
- * Send payload to server for JWT signing and httpOnly cookie storage.
+ * Store authentication tokens in memory.
  */
-export const setToken = async <T>(payload: TokenPayload<T>): Promise<void> => {
-  const cookie: CookieOptions = {
-    domain: COOKIE_DOMAIN,
-    maxAge: COOKIE_MAX_AGE,
-    secure: COOKIE_SECURE,
-    httpOnly: true,
-  };
-
-  await apiRequest<void>(TOKEN_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user: payload.user, cookie }),
-  });
+export const setToken = (token: string, refreshToken?: string): void => {
+  SecureTokenManager.getInstance().setTokens(token, refreshToken);
 };
 
 /**
- * Retrieve and verify JWT from secure cookie via server call.
+ * Retrieve the stored access token if still valid.
  */
-export const getToken = async <T>(): Promise<TokenPayload<T> | null> => {
-  try {
-    return await apiRequest<TokenPayload<T>>(TOKEN_ENDPOINT);
-  } catch {
-    return null;
-  }
+export const getToken = (): string | null => {
+  return SecureTokenManager.getInstance().getToken();
 };
 
 /**
- * Clear authentication token cookie on the server.
+ * Remove all stored authentication tokens.
  */
-export const clearToken = async (): Promise<void> => {
-  await apiRequest<void>(TOKEN_ENDPOINT, { method: 'DELETE' });
+export const clearToken = (): void => {
+  SecureTokenManager.getInstance().clearTokens();
 };

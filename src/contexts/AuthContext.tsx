@@ -54,38 +54,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize auth state from secure token
+  // Initialize auth state from in-memory token
   useEffect(() => {
-    (async () => {
-      const stored = await getToken<User>();
-      if (stored) {
-        setUser(stored.user);
+    const token = getToken();
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1])) as { user: User };
+        setUser(payload.user);
+      } catch {
+        clearToken();
       }
-      setIsLoading(false);
-    })();
+    }
+    setIsLoading(false);
   }, []);
 
-  // Persist token when user state changes
-  useEffect(() => {
-    (async () => {
-      if (user) {
-        await setToken<User>({ user });
-      } else {
-        await clearToken();
-      }
-    })();
-  }, [user]);
 
   const login = async (email: string, password: string): Promise<boolean> => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await apiRequest<User>('/api/login', {
+      const data = await apiRequest<{ token: string; user: User }>('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-      setUser(data);
+      setToken(data.token);
+      setUser(data.user);
       return true;
     } catch (error) {
       setError('Unable to login. Please try again.');
@@ -100,12 +94,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     setError(null);
     try {
-      const data = await apiRequest<User>('/api/login/wallet', {
+      const data = await apiRequest<{ token: string; user: User }>('/api/login/wallet', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ walletAddress }),
       });
-      setUser(data);
+      setToken(data.token);
+      setUser(data.user);
       return true;
     } catch (error) {
       setError('Wallet login failed.');
@@ -120,12 +115,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     setError(null);
     try {
-      const data = await apiRequest<User>('/api/register', {
+      const data = await apiRequest<{ token: string; user: User }>('/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData),
       });
-      setUser(data);
+      setToken(data.token);
+      setUser(data.user);
       return true;
     } catch (error) {
       setError('Registration failed.');
@@ -143,7 +139,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       logError(error, 'logout');
     } finally {
-      await clearToken();
+      clearToken();
       setUser(null);
     }
   };
