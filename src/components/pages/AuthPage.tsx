@@ -9,7 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
-import { loginSchema, registerSchema } from '@/lib/validators';
+import { loginSchema, registerSchema } from '@/lib/validation';
 import { logError } from '@/lib/errors';
 
 const AuthPage: React.FC = () => {

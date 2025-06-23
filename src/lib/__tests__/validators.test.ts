@@ -1,10 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import {
-  loginSchema,
-  registerSchema,
   ethereumAddressSchema,
   walletLoginSchema,
 } from '../validators';
+import {
+  loginSchema,
+  registerSchema,
+  profileUpdateSchema,
+  commentSchema,
+  searchSchema,
+} from '../validation';
 
 describe('loginSchema', () => {
   it('validates correct data', () => {
@@ -136,3 +141,41 @@ describe('walletLoginSchema', () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe('profileUpdateSchema', () => {
+  it('accepts partial profile data', () => {
+    const result = profileUpdateSchema.safeParse({ bio: 'Hello world' })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects invalid avatar url', () => {
+    const result = profileUpdateSchema.safeParse({ avatar: 'javascript:bad' })
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('commentSchema', () => {
+  it('rejects empty comment', () => {
+    const result = commentSchema.safeParse({ content: '' })
+    expect(result.success).toBe(false)
+  })
+
+  it('sanitizes script tags', () => {
+    const result = commentSchema.safeParse({ content: '<script>alert(1)</script>Test' })
+    expect(result.success).toBe(true)
+    expect(result.data.content).toBe('Test')
+  })
+})
+
+describe('searchSchema', () => {
+  it('trims long queries', () => {
+    const long = 'a'.repeat(150)
+    const result = searchSchema.safeParse({ query: long })
+    expect(result.success).toBe(false)
+  })
+
+  it('accepts normal query', () => {
+    const result = searchSchema.safeParse({ query: 'bitcoin' })
+    expect(result.success).toBe(true)
+  })
+})

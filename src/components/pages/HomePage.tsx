@@ -15,6 +15,7 @@ import {
 import { useData } from '@/contexts/DataContext';
 import ArticleCard from '@/components/ui/ArticleCard';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { searchSchema } from '@/lib/validation';
 const TrendingSidebar = lazy(() => import('@/components/ui/TrendingSidebar'));
 
 const HomePage: React.FC = () => {
@@ -168,7 +169,10 @@ const HomePage: React.FC = () => {
                     type="search"
                     placeholder="Search articles..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      const parsed = searchSchema.safeParse({ query: e.target.value });
+                      setSearchQuery(parsed.success ? parsed.data.query : e.target.value.slice(0, 100));
+                    }}
                     className="pl-10"
                   />
                 </div>

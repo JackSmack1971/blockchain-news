@@ -34,6 +34,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import ArticleCard from '@/components/ui/ArticleCard';
 import { sanitizeHtml } from '@/lib/sanitizeHtml';
+import { commentSchema } from '@/lib/validation';
 
 interface Comment {
   id: string;
@@ -174,9 +175,10 @@ const ArticlePage: React.FC = () => {
       toast.error('Please sign in to comment');
       return;
     }
-    
-    if (!newComment.trim()) {
-      toast.error('Please enter a comment');
+
+    const parsed = commentSchema.safeParse({ content: newComment });
+    if (!parsed.success) {
+      toast.error(parsed.error.errors[0].message);
       return;
     }
 
@@ -191,7 +193,7 @@ const ArticlePage: React.FC = () => {
         name: user?.username || 'Anonymous',
         avatar: user?.avatar || '/images/avatars/default.jpg',
       },
-      content: newComment,
+      content: parsed.data.content,
       timestamp: new Date().toISOString(),
       likes: 0,
       dislikes: 0,

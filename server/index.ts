@@ -7,6 +7,7 @@ import { config } from './config';
 import { logSecurityEvent } from './logging';
 import { authRouter } from './auth';
 import { securityMiddleware } from './middleware/security';
+import { profileUpdateSchema } from '../src/lib/validation';
 import {
   initDb,
   resetDatabase,
@@ -133,14 +134,19 @@ app.get('/api/protected', requireAuth, (req, res) => {
 const allowedProfileFields = ['username', 'email', 'bio', 'avatar', 'displayName'] as const;
 
 app.post('/api/profile', requireAuth, (req, res) => {
-  const profileUpdates: Record<string, string> = {};
-  allowedProfileFields.forEach(field => {
-    if (req.body[field] !== undefined) {
-      profileUpdates[field] = sanitize(req.body[field]);
-    }
-  });
-  Object.assign(req.session.user, profileUpdates);
-  res.json({ success: true });
+  try {
+    const parsed = profileUpdateSchema.partial().parse(req.body);
+    const profileUpdates: Record<string, string> = {};
+    allowedProfileFields.forEach(field => {
+      if (parsed[field] !== undefined) {
+        profileUpdates[field] = sanitize(parsed[field]);
+      }
+    });
+    Object.assign(req.session.user, profileUpdates);
+    res.json({ success: true });
+  } catch {
+    res.status(400).json({ error: 'Invalid input' });
+  }
 });
 
 // Custom 404 handler to ensure consistent security headers
