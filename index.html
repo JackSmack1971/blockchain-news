@@ -12,14 +12,14 @@
   
   <!-- Open Graph Meta Tags -->
   <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://blockchainnews.com/" />
+  <meta property="og:url" content="" />
   <meta property="og:title" content="BlockchainNews - Your Trusted Source for Crypto News" />
   <meta property="og:description" content="Stay updated with the latest blockchain and cryptocurrency news, market analysis, and industry insights from trusted sources." />
   <meta property="og:site_name" content="BlockchainNews" />
   
   <!-- Twitter Card Meta Tags -->
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:url" content="https://blockchainnews.com/" />
+  <meta name="twitter:url" content="" />
   <meta name="twitter:title" content="BlockchainNews - Your Trusted Source for Crypto News" />
   <meta name="twitter:description" content="Stay updated with the latest blockchain and cryptocurrency news, market analysis, and industry insights from trusted sources." />
   
@@ -42,6 +42,105 @@
       }
     } catch (_) {}
   </script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    :root {
+      --primary: #6366f1;
+      --primary-dark: #4f46e5;
+      --background: #f8fafc;
+      --background-dark: #0f172a;
+      --card: #ffffff;
+      --card-dark: #1e293b;
+      --text: #1e293b;
+      --text-dark: #f8fafc;
+      --accent: #f59e0b;
+      --transition: all 0.3s ease;
+    }
+
+    html.dark {
+      --background: var(--background-dark);
+      --card: var(--card-dark);
+      --text: var(--text-dark);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: linear-gradient(135deg, var(--background) 0%, #e2e8f0 100%);
+      color: var(--text);
+      min-height: 100vh;
+      transition: var(--transition);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .dark body {
+      background: linear-gradient(135deg, var(--background) 0%, #0f172a 100%);
+    }
+
+    #root {
+      flex: 1;
+    }
+
+    noscript div {
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      padding: 2.5rem;
+      max-width: 480px;
+      margin: 2rem auto;
+      animation: fadeIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .dark noscript div {
+      background: rgba(30, 41, 59, 0.9);
+      border-color: rgba(15, 23, 42, 0.3);
+    }
+
+    noscript h1 {
+      font-size: 2.5rem;
+      margin-bottom: 1.5rem;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      font-weight: 700;
+    }
+
+    noscript p {
+      font-size: 1.1rem;
+      line-height: 1.6;
+      color: inherit;
+      opacity: 0.8;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.98);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation: none !important;
+        transition: none !important;
+      }
+    }
+  </style>
 </head>
 <body>
   <div id="root"></div>
