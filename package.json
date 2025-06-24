@@ -55,7 +55,7 @@
     "express-rate-limit": "^6.7.0",
     "express-session": "^1.17.3",
     "input-otp": "^1.4.2",
-    "lucide-react": "^0.364.0",
+    "lucide-react": "^0.523.0",
     "next-themes": "^0.4.4",
     "pg": "^8.16.2",
     "react": "^18.3.1",
