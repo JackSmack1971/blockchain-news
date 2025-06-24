@@ -80,3 +80,9 @@ export const searchSchema = z.object({
     .transform(val => sanitizeInput(val))
     .pipe(z.string().max(100))
 })
+
+export type LoginCredentials = z.infer<typeof loginSchema>
+export type RegisterCredentials = z.infer<typeof registerSchema>
+export type ProfileUpdate = z.infer<typeof profileUpdateSchema>
+export type CommentInput = z.infer<typeof commentSchema>
+export type SearchQuery = z.infer<typeof searchSchema>
