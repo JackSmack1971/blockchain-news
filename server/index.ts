@@ -7,7 +7,8 @@ import { config } from './config';
 import { logSecurityEvent } from './logging';
 import { authRouter } from './auth';
 import { securityMiddleware } from './middleware/security';
-import { profileUpdateSchema } from '../src/lib/validation';
+import { profileUpdateSchema, commentSchema, searchSchema } from '../src/lib/validation';
+import crypto from 'crypto';
 import {
   initDb,
   resetDatabase,
@@ -41,6 +42,19 @@ await initDb();
 export const resetUsers = async (): Promise<void> => {
   await resetDatabase();
 };
+
+interface Comment {
+  id: string;
+  articleId: string;
+  userId: string;
+  content: string;
+}
+
+const comments: Comment[] = [];
+export const resetComments = (): void => {
+  comments.length = 0;
+};
+export const getComments = (): Comment[] => comments;
 
 
 export const shutdown = async (): Promise<void> => {
@@ -144,6 +158,34 @@ app.post('/api/profile', requireAuth, (req, res) => {
     });
     Object.assign(req.session.user, profileUpdates);
     res.json({ success: true });
+  } catch {
+    res.status(400).json({ error: 'Invalid input' });
+  }
+});
+
+app.post('/api/articles/:articleId/comments', requireAuth, (req, res) => {
+  try {
+    const { content } = commentSchema.parse(req.body);
+    const sanitizedContent = sanitize(content);
+    const articleId = sanitize(req.params.articleId);
+    const comment = {
+      id: crypto.randomUUID(),
+      articleId,
+      userId: req.session.user!.id,
+      content: sanitizedContent,
+    };
+    comments.push(comment);
+    res.status(201).json({ comment });
+  } catch {
+    res.status(400).json({ error: 'Invalid input' });
+  }
+});
+
+app.get('/api/articles/search', (req, res) => {
+  try {
+    const { query } = searchSchema.parse({ query: req.query.q });
+    const sanitizedQuery = sanitize(query);
+    res.json({ query: sanitizedQuery, results: [] });
   } catch {
     res.status(400).json({ error: 'Invalid input' });
   }
